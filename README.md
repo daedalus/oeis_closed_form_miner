@@ -2,7 +2,7 @@
 
 ## Overview
 
-This Python script is designed to interact with the On-Line Encyclopedia of Integer Sequences (OEIS) to retrieve, process, and store information about integer sequences. The script uses a combination of web scraping, local caching, and database storage to analyze OEIS sequences and guess their closed forms.
+This Python script is designed to interact with the On-Line Encyclopedia of Integer Sequences [OEIS](https://oeis.org) to retrieve, process, and store information about integer sequences. The script uses a combination of web scraping, local caching, and database storage to analyze OEIS sequences and guess their closed forms.
 
 ## Features
 
