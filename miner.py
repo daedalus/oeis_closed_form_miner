@@ -164,7 +164,7 @@ def process_sequences():
             formula = '' if 'formula' not in raw_data['results'][0] else json.dumps(raw_data['results'][0]['formula'])
             closed_form = ""
             simplified_closed_form = ""
-            if (cf := check_sequence(tointlist(data))) is not None:
+            if (cf := check_sequence([int(x) for x in data.split(",")])) is not None:
                 found_count += 1
                 closed_form = str(cf)
                 try:
