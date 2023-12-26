@@ -1,4 +1,4 @@
-# OEIS Sequence Analyzer
+# OEIS Closed Form Miner
 
 ## Overview
 
