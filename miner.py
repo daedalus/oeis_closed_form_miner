@@ -171,11 +171,11 @@ def process_sequences():
                     simplified_closed_form = str(cf.full_simplify().operands()[0])
                 except Exception:
                     simplified_closed_form = ""
+            is_new = (closed_form is not None and closed_form not in name and closed_form not in formula) \
+                     or (simplified_closed_form is not None and simplified_closed_form not in name and simplified_closed_form not in formula)
             sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=? WHERE id=?"""
-            cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(new_count), sequence_id))
-            if (closed_form is not None and closed_form not in name and closed_form not in formula) \
-                    or (simplified_closed_form is not None and simplified_closed_form not in name and
-                        simplified_closed_form not in formula):
+            cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new), sequence_id))
+            if is_new:
                 new_count += 1
                 print(80 * "=")
                 print("ID:", sequence_id)
