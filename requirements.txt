@@ -1,0 +1,8 @@
+# requirements.txt
+
+# Python libraries
+requests==2.26.0
+
+# External libraries
+sage==9.5
+lzo==1.12
