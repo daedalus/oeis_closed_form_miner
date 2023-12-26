@@ -14,6 +14,15 @@ SEQUENCE_MODE = "lzo"
 
 
 def get_sequence(id):
+    """
+    Fetches the OEIS sequence information for the given ID from the OEIS website.
+
+    Args:
+        id (str): The OEIS sequence ID.
+
+    Returns:
+        dict or None: The sequence information in dictionary format or None if fetching fails.
+    """
     try:
         response = requests.get(f"https://oeis.org/search?fmt=json&q=id:{id}")
         return json.loads(response.content)
@@ -22,6 +31,15 @@ def get_sequence(id):
 
 
 def load_cached_sequence(id):
+    """
+    Loads a previously cached OEIS sequence data from the local storage.
+
+    Args:
+        id (str): The OEIS sequence ID.
+
+    Returns:
+        dict or None: The cached sequence data in dictionary format or None if not found.
+    """
     file_path = os.path.join(OEIS_DATA_DIR, f'{id}.{SEQUENCE_MODE}')
     if os.path.isfile(file_path):
         with open(file_path, 'rb') as fp:
@@ -33,6 +51,13 @@ def load_cached_sequence(id):
 
 
 def save_cached_sequence(id, data):
+    """
+    Saves the OEIS sequence data to the local cache.
+
+    Args:
+        id (str): The OEIS sequence ID.
+        data (dict): The sequence data to be cached.
+    """
     file_path = os.path.join(OEIS_DATA_DIR, f'{id}.{SEQUENCE_MODE}')
     with open(file_path, 'wb') as fp:
         if SEQUENCE_MODE == 'lzo':
@@ -42,13 +67,28 @@ def save_cached_sequence(id, data):
 
 
 def guess_sequence(lst):
-    C = CFiniteSequences(QQ)
-    if (s := C.guess(lst)) == 0:
-        return None
-    return s.closed_form()
+    """
+    Guesses the closed form of an integer sequence.
 
+    Args:
+        lst (list): List of integers representing the sequence.
+
+    Returns:
+        object or None: The guessed closed form or None if no closed form is found.
+    """
+    return None if (s := CFiniteSequences(QQ).guess(lst)) == 0 else s.closed_form()
 
 def check_sequence(data, items=10):
+    """
+    Checks a small portion of terms of the sequence first and then the whole sequence.
+
+    Args:
+        data (list): List of integers representing the sequence.
+        items (int): Number of items to check initially.
+
+    Returns:
+        object or None: The guessed closed form or None if no closed form is found.
+    """
     seq = data[:items]
     if len(seq) > 7 and (result := guess_sequence(seq)) is not None:
         seq = data
@@ -56,12 +96,21 @@ def check_sequence(data, items=10):
 
 
 def process_file():
+    """
+    Processes the sequence IDs from a file and prints their corresponding sequence information.
+    """
     ids = [line.rstrip() for line in open(sys.argv[1], 'r').readlines()]
     for sequence_id in ids:
         print(sequence_id, get_sequence(sequence_id))
 
 
 def create_database(length):
+    """
+    Creates a blank database with a table for storing OEIS sequence information.
+
+    Args:
+        length (int): The number of sequences to prepopulate the database with.
+    """
     if not os.path.isfile(OEIS_DB_PATH):
         conn = sqlite3.connect(OEIS_DB_PATH)
         cur = conn.cursor()
@@ -73,12 +122,27 @@ def create_database(length):
 
 
 def yield_unprocessed_ids(cursor):
+    """
+    Yields a generator of unvisited sequences from the database.
+
+    Args:
+        cursor (sqlite3.Cursor): SQLite database cursor.
+
+    Yields:
+        str: The next unvisited sequence ID.
+    """
     cursor.execute("SELECT id FROM sequence WHERE name IS NULL;")
     for row in cursor.fetchall():
         yield row[0]
 
 
 def process_sequences():
+    """
+    Processes sequences from the generator:
+    - Fetches each unvisited sequence from the server or local cache.
+    - Guesses its closed form and matches it to name and formula.
+    - Saves everything to the database and prints statistics.
+    """
     conn = sqlite3.connect(OEIS_DB_PATH)
     cursor = conn.cursor()
     fail_count = 0
@@ -137,3 +201,4 @@ def process_sequences():
 if __name__ == "__main__":
     create_database(368_000)
     process_sequences()
+
