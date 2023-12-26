@@ -1,3 +1,7 @@
+#
+# Copyright Darío Clavijo 2023.
+#
+
 from sage.all import *
 import sys
 import json
@@ -113,9 +117,9 @@ def process_sequences():
       if (sCF is not None and sCF not in N and sCF not in F) or (sSCF is not None and sSCF not in N and sSCF not in F):
         NEW+=1
         print(80*"=")
-        print(80*"-")
         print("ID:",id)
         print("NAME:",N)
+        print(80*"-")
         print("CLOSED_FORM:",sCF,"len:", len(sCF))
         print("SIMP_CLOSED_FORM:", sSCF,"len:", len(sSCF))
         print(80*"-")
