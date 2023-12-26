@@ -21,6 +21,10 @@ def getSequence1(id):
 
 
 def getSequence2(id):
+  """
+  Fetch a sequence page and store in a local compressed file 
+  using it as a cache to avoid overwelming the server.
+  """
   mode = "lzo"
   name = 'oeis_data/%s.%s' % (id, mode)
   if os.path.isfile(name):
@@ -40,11 +44,13 @@ def getSequence2(id):
           fp.write(json.dumps(data).encode("utf8"))
         fp.close()
       return data
-    
 getSequence = getSequence2
 
 
 def guessSequence(lst):
+  """
+  Guess the closed form of an integer sequence.
+  """
   C = CFiniteSequences(QQ)
   if (s:= C.guess(lst)) == 0:
     return
@@ -53,6 +59,9 @@ def guessSequence(lst):
 
 
 def checkSequence(data,items=10):
+  """
+  Check a small portion of terms of the sequence first and then the whole sequence.
+  """
   seq = data[:items]
   #print(len(seq))
   if len(seq) > 7 and (r:=guessSequence(seq)) is not None:
@@ -67,6 +76,9 @@ def procfile():
 
 
 def create_database(L):
+  """
+  Create a blank database.
+  """
   name = 'oeis_data/oeis.db' 
   if not os.path.isfile(name):
     conn = sqlite3.connect(name)
@@ -77,6 +89,9 @@ def create_database(L):
     conn.commit()
 
 def yield_unprocessed_ids(cursor):
+  """
+  Yield a generator of unvisited sequences.
+  """
   cursor.execute("SELECT id FROM sequence where name IS NULL;")
   for row in cursor.fetchall():
     yield row[0]
@@ -85,6 +100,12 @@ def yield_unprocessed_ids(cursor):
 tointlist = lambda lst: [int(x) for x in lst.split(",")]
 
 def process_sequences():
+  """
+  Process sequences from generator:
+  each unvisited sequence if fetch from the server,
+  followed by a guessing of its closed form and match to name and formula.
+  Everything is saved to the database and stats printed.
+  """
   conn = sqlite3.connect('oeis_data/oeis.db')
   cursor = conn.cursor()
   FAIL = 0
@@ -100,7 +121,7 @@ def process_sequences():
       F = ''
       if 'formula' in raw_data['results'][0]:
         F = json.dumps(raw_data['results'][0]['formula'])
-      Fb = sqlite3.Binary(pickle.dumps(F, pickle.HIGHEST_PROTOCOL))
+      #Fb = sqlite3.Binary(pickle.dumps(F, pickle.HIGHEST_PROTOCOL))
       sCF=""
       sSCF="" 
       if (CF := checkSequence(tointlist(D))) is not None:
@@ -110,10 +131,8 @@ def process_sequences():
           sSCF = str(CF.full_simplify().operands()[0])
         except:
           sSCF = ""
-          print("maxima could not simplify", sCF)
-       
       sql = """update sequence set name = ?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=? where id=?""" 
-      cursor.execute(sql,(N,D,Fb,sCF,sSCF,int(NEW),id))
+      cursor.execute(sql,(N,D,F,sCF,sSCF,int(NEW),id))
       if (sCF is not None and sCF not in N and sCF not in F) or (sSCF is not None and sSCF not in N and sSCF not in F):
         NEW+=1
         print(80*"=")
@@ -121,7 +140,10 @@ def process_sequences():
         print("NAME:",N)
         print(80*"-")
         print("CLOSED_FORM:",sCF,"len:", len(sCF))
-        print("SIMP_CLOSED_FORM:", sSCF,"len:", len(sSCF))
+        if sSCF is not None:
+          print("SIMP_CLOSED_FORM:", sSCF,"len:", len(sSCF))
+        else:
+          print(id, "maxima could not simplify", sCF)
         print(80*"-")
         print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f" % (PROC, FOUND, NEW, PROC/FOUND, FOUND/NEW)) 
     else:
@@ -132,5 +154,7 @@ def process_sequences():
     if n % 10 == 0:
       conn.commit()
 
-create_database(368_000)
-process_sequences()
+
+if __name__ == "__main__"
+  create_database(368_000)
+  process_sequences()
