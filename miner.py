@@ -14,7 +14,7 @@ import os
 
 def getSequence1(id):
   try:
-    f = requests.get("https://oeis.org/search?fmt=json&q=id:%s" % id)
+    f = requests.get(f"https://oeis.org/search?fmt=json&q=id:{id}")
     return json.loads(f.content)
   except:
     return None
@@ -26,7 +26,7 @@ def getSequence2(id):
   using it as a cache to avoid overwelming the server.
   """
   mode = "lzo"
-  name = 'oeis_data/%s.%s' % (id, mode)
+  name = f'oeis_data/{id}.{mode}'
   if os.path.isfile(name):
     with open(name,'rb') as fp:
       if mode == 'lzo':
@@ -34,7 +34,7 @@ def getSequence2(id):
       else:
         return json.loads(fp.read())
   else:
-    rep = requests.get("https://oeis.org/search?fmt=json&q=id:%s" % id)
+    rep = requests.get(f"https://oeis.org/search?fmt=json&q=id:{id}")
     if rep.status_code == 200:
       data = json.loads(rep.content)
       with open(name,'wb') as fp:
