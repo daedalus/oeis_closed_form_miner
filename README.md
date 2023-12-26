@@ -35,8 +35,8 @@ This Python script is designed to interact with the On-Line Encyclopedia of Inte
 
 ## Usage
 
-1. Ensure the required dependencies are installed, including SageMath.
-2. Run the script using `python script_name.py` (replace `script_name.py` with the actual script filename).
+1. Ensure the required dependencies are installed, including SageMath: `pip install -r requirements.txt`.
+2. Run the script using `python miner.py`.
 3. The script will create a database, process sequences, and print relevant statistics.
 
 ## Dependencies
