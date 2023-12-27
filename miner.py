@@ -155,7 +155,7 @@ def create_database(length):
         conn = sqlite3.connect(OEIS_DB_PATH)
         cur = conn.cursor()
         cur.execute("CREATE TABLE sequence(id, name TEXT, data TEXT, formula TEXT, closed_form TEXT, "
-                    "simplified_closed_form TEXT, new INT, regex_match INT)")
+                    "simplified_closed_form TEXT, new INT, regex_match INT, keyword TEXT)")
         for n in range(1, length + 1):
             cur.execute("INSERT INTO sequence (id) VALUES ('A%06d');" % n)
         conn.commit()
@@ -188,6 +188,7 @@ def process_sequences():
     fail_count = 0
     new_count = 0
     found_count = 0
+    hard_count = 0
     for n, sequence_id in enumerate(yield_unprocessed_ids(cursor)):
         cached_data = load_cached_sequence(sequence_id)
         if cached_data is not None:
@@ -201,6 +202,7 @@ def process_sequences():
             proc = n + 1
             name = raw_data['results'][0]['name']
             data = raw_data['results'][0]['data']
+            keyword = raw_data['results'][0]['keyword']
             lformula,formula = [],''
             if 'formula' in raw_data['results'][0]:
               lformula = raw_data['results'][0]['formula']
@@ -219,11 +221,12 @@ def process_sequences():
             regex_match = formula_match(lformula, closed_form) 
             is_new &= not regex_match
 
-            sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=? WHERE id=?"""
-            cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new), int(regex_match), sequence_id))
+            sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, keyword=? WHERE id=?"""
+            cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new), int(regex_match), keyword, sequence_id))
             if is_new:
             #if regex_match:
                 new_count += 1
+                if keyword.find("hard") > -1: hard_count += 1
                 print(80 * "=")
                 print("ID:", sequence_id)
                 print("NAME:", name)
@@ -234,10 +237,11 @@ def process_sequences():
                 else:
                     print(sequence_id, "maxima could not simplify", closed_form)
                 print("regex_match:", regex_match)
+                print("keywords:", keyword)
                 print(80 * "-")
                 if found_count > 0 and new_count > 0:
-                  print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f"
-                      % (proc, found_count, new_count, proc / found_count, found_count / new_count))
+                  print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f, RATIO(P/N): %.3f, HARD: %d"
+                      % (proc, found_count, new_count, proc / found_count, found_count / new_count, proc/new_count, hard_count))
         else:
             fail_count += 1
             if fail_count == 10:
