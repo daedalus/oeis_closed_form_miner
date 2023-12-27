@@ -1,17 +1,51 @@
 # Copyright Darío Clavijo 2023.
 
+import re
 import os
 import sys
 import json
 import requests
 import sqlite3
 import lzo
-from sage.all import CFiniteSequences, QQ
+from sage.all import CFiniteSequences, QQ, sage_eval, var
 
 OEIS_DATA_DIR = 'oeis_data'
 OEIS_DB_PATH = os.path.join(OEIS_DATA_DIR, 'oeis.db')
 SEQUENCE_MODE = "lzo"
 
+
+def regex_match(exp):
+  """
+  Matches an expresion (formula in the OEIS format) to a regex:
+  Args: 
+      exp: expresion.
+  Returns:
+      A string representation of a formula.
+  """
+  r = '^a\(n\)\s\=\s(.*)\.\s\-\s\_(.*)\_\,(.*)$'
+  try:
+    if len(b:=re.match(r,exp).groups()) > 0: return b[0]
+  except: return None
+
+
+def formula_match(formulas, closed_form):
+  """
+  It extracts every formula from a list in the OEIS format then
+  matches every formula in the list to a closed_form.
+  Args:
+      list of formulas, closed_form string.
+  Returns: 
+      True if match.
+  """
+  x = var('x')
+  fexp1 = sage_eval(closed_form,locals={'n':x})
+  for formula in formulas:
+    if (rformula := regex_match(formula)) is not None:
+      try:
+        fexp2 = sage_eval(rformula,locals={'n':x})
+        if bool(fexp1 == fexp2): return True
+      except: pass
+  return False
 
 def get_sequence(id):
     """
@@ -161,7 +195,10 @@ def process_sequences():
             proc = n + 1
             name = raw_data['results'][0]['name']
             data = raw_data['results'][0]['data']
-            formula = '' if 'formula' not in raw_data['results'][0] else json.dumps(raw_data['results'][0]['formula'])
+            lformula,formula = [],''
+            if 'formula' in raw_data['results'][0]:
+              lformula = raw_data['results'][0]['formula']
+              formula = json.dumps(lformula)
             closed_form = ""
             simplified_closed_form = ""
             if (cf := check_sequence([int(x) for x in data.split(",")])) is not None:
@@ -171,8 +208,11 @@ def process_sequences():
                     simplified_closed_form = str(cf.full_simplify().operands()[0])
                 except Exception:
                     simplified_closed_form = ""
-            is_new = (closed_form is not None and closed_form not in name and closed_form not in formula) \
-                     or (simplified_closed_form is not None and simplified_closed_form not in name and simplified_closed_form not in formula)
+            is_new = (closed_form is not None and closed_form not in name and closed_form not in formula)  
+            is_new |= (simplified_closed_form is not None and simplified_closed_form not in name and simplified_closed_form not in formula)
+            regex_match = formula_match(lformula, closed_form) 
+            is_new |= not regex_match
+
             sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=? WHERE id=?"""
             cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new), sequence_id))
             if is_new:
@@ -186,6 +226,7 @@ def process_sequences():
                     print("SIMP_CLOSED_FORM:", simplified_closed_form, "len:", len(simplified_closed_form))
                 else:
                     print(sequence_id, "maxima could not simplify", closed_form)
+                print("regex_match:", regex_match)
                 print(80 * "-")
                 print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f"
                       % (proc, found_count, new_count, proc / found_count, found_count / new_count))
@@ -201,4 +242,3 @@ def process_sequences():
 if __name__ == "__main__":
     create_database(368_000)
     process_sequences()
-
