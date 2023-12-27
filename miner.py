@@ -51,6 +51,7 @@ def formula_match(formulas, closed_form):
       except: pass
   return False
 
+
 def get_sequence(id):
     """
     Fetches the OEIS sequence information for the given ID from the OEIS website.
@@ -115,6 +116,7 @@ def guess_sequence(lst):
         object or None: The guessed closed form or None if no closed form is found.
     """
     return None if (s := CFiniteSequences(QQ).guess(lst)) == 0 else s.closed_form()
+
 
 def check_sequence(data, items=10):
     """
