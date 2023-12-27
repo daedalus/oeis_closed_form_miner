@@ -13,8 +13,11 @@ OEIS_DATA_DIR = 'oeis_data'
 OEIS_DB_PATH = os.path.join(OEIS_DATA_DIR, 'oeis.db')
 SEQUENCE_MODE = "lzo"
 
+R1 = '^a\(n\)\s\=\s(.*)\.\s\-\s\_(.*)\_\,(.*)$'
+R2 = '^a\(n\)\s\=\s(.*)\.$'
+R3 = 'a\(n\)\s\=\s(.*)\.|(\s\-\s\_(.*)\_\,(.*))$'
 
-def regex_match(exp):
+def regex_match(r,exp):
   """
   Matches an expresion (formula in the OEIS format) to a regex:
   Args: 
@@ -22,7 +25,6 @@ def regex_match(exp):
   Returns:
       A string representation of a formula.
   """
-  r = '^a\(n\)\s\=\s(.*)\.\s\-\s\_(.*)\_\,(.*)$'
   try:
     if len(b:=re.match(r,exp).groups()) > 0: return b[0]
   except: return None
@@ -39,12 +41,13 @@ def formula_match(formulas, closed_form):
   """
   if len(closed_form) == 0: return False
   x = var('x')
+  #z = var('z')
   try:
     fexp1 = sage_eval(closed_form,locals={'n':x})
   except:
     return False
   for formula in formulas:
-    if (rformula := regex_match(formula)) is not None:
+    if (rformula := regex_match(R3,formula)) is not None:
       try:
         fexp2 = sage_eval(rformula,locals={'n':x})
         if bool(fexp1 == fexp2): return True
@@ -79,8 +82,13 @@ def load_cached_sequence(id):
     Returns:
         dict or None: The cached sequence data in dictionary format or None if not found.
     """
-    file_path = os.path.join(OEIS_DATA_DIR, f'{id}.{SEQUENCE_MODE}')
-    if os.path.isfile(file_path):
+    n = id[1:4]
+    file_path = None
+    file_path0 = os.path.join(OEIS_DATA_DIR, f'{id}.{SEQUENCE_MODE}')
+    file_path1 = os.path.join(OEIS_DATA_DIR, n, f'{id}.{SEQUENCE_MODE}')
+    if os.path.isfile(file_path0): file_path = file_path0
+    if os.path.isfile(file_path1): file_path = file_path1
+    if file_path is not None:
         with open(file_path, 'rb') as fp:
             if SEQUENCE_MODE == 'lzo':
                 return json.loads(lzo.decompress(fp.read()))
@@ -97,13 +105,15 @@ def save_cached_sequence(id, data):
         id (str): The OEIS sequence ID.
         data (dict): The sequence data to be cached.
     """
-    file_path = os.path.join(OEIS_DATA_DIR, f'{id}.{SEQUENCE_MODE}')
+    n = id[1:4]
+    d = f"{OEIS_DATA_DIR}/{n}"
+    if not os.path.isdir(d): os.system(f"mkdir {d}")
+    file_path = os.path.join(OEIS_DATA_DIR, n,f'{id}.{SEQUENCE_MODE}')
     with open(file_path, 'wb') as fp:
         if SEQUENCE_MODE == 'lzo':
             fp.write(lzo.compress(json.dumps(data), 9))
         else:
             fp.write(json.dumps(data).encode("utf8"))
-
 
 def guess_sequence(lst):
     """
@@ -208,6 +218,7 @@ def process_sequences():
             if 'formula' in raw_data['results'][0]:
               lformula = raw_data['results'][0]['formula']
               formula = json.dumps(lformula)
+            if regex_match(R2, name) is not None: lformula.append(name)
             closed_form = ""
             simplified_closed_form = ""
             if (cf := check_sequence([int(x) for x in data.split(",")])) is not None:
@@ -219,11 +230,11 @@ def process_sequences():
                     simplified_closed_form = ""
             is_new = (closed_form is not None and closed_form not in name and closed_form not in formula)  
             is_new |= (simplified_closed_form is not None and simplified_closed_form not in name and simplified_closed_form not in formula)
-            regex_match = formula_match(lformula, closed_form) 
-            is_new &= not regex_match
+            v_regex_match = formula_match(lformula, closed_form) 
+            is_new &= not v_regex_match
 
             sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, keyword=? WHERE id=?"""
-            cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new), int(regex_match), keyword, sequence_id))
+            cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new), int(v_regex_match), keyword, sequence_id))
             if is_new:
             #if regex_match:
                 new_count += 1
@@ -234,11 +245,11 @@ def process_sequences():
                 print("NAME:", name)
                 print(80 * "-")
                 print("CLOSED_FORM:", closed_form, "len:", len(closed_form))
-                if simplified_closed_form is not None:
+                if simplified_closed_form is not None and len(simplified_closed_form) > 0:
                     print("SIMP_CLOSED_FORM:", simplified_closed_form, "len:", len(simplified_closed_form))
                 else:
                     print(sequence_id, "maxima could not simplify", closed_form)
-                print("regex_match:", regex_match)
+                print("regex_match:", v_regex_match)
                 print("keywords:", keyword)
                 print(80 * "-")
                 if found_count > 0 and new_count > 0:
