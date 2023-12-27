@@ -37,8 +37,12 @@ def formula_match(formulas, closed_form):
   Returns: 
       True if match.
   """
+  if len(closed_form) == 0: return False
   x = var('x')
-  fexp1 = sage_eval(closed_form,locals={'n':x})
+  try:
+    fexp1 = sage_eval(closed_form,locals={'n':x})
+  except:
+    return False
   for formula in formulas:
     if (rformula := regex_match(formula)) is not None:
       try:
@@ -149,7 +153,7 @@ def create_database(length):
         conn = sqlite3.connect(OEIS_DB_PATH)
         cur = conn.cursor()
         cur.execute("CREATE TABLE sequence(id, name TEXT, data TEXT, formula TEXT, closed_form TEXT, "
-                    "simplified_closed_form TEXT, new INT)")
+                    "simplified_closed_form TEXT, new INT, regex_match INT)")
         for n in range(1, length + 1):
             cur.execute("INSERT INTO sequence (id) VALUES ('A%06d');" % n)
         conn.commit()
@@ -211,11 +215,12 @@ def process_sequences():
             is_new = (closed_form is not None and closed_form not in name and closed_form not in formula)  
             is_new |= (simplified_closed_form is not None and simplified_closed_form not in name and simplified_closed_form not in formula)
             regex_match = formula_match(lformula, closed_form) 
-            is_new |= not regex_match
+            is_new &= not regex_match
 
-            sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=? WHERE id=?"""
-            cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new), sequence_id))
+            sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=? WHERE id=?"""
+            cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new), int(regex_match), sequence_id))
             if is_new:
+            #if regex_match:
                 new_count += 1
                 print(80 * "=")
                 print("ID:", sequence_id)
@@ -228,7 +233,8 @@ def process_sequences():
                     print(sequence_id, "maxima could not simplify", closed_form)
                 print("regex_match:", regex_match)
                 print(80 * "-")
-                print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f"
+                if found_count > 0 and new_count > 0:
+                  print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f"
                       % (proc, found_count, new_count, proc / found_count, found_count / new_count))
         else:
             fail_count += 1
