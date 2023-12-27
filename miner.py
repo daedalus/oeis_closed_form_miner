@@ -7,6 +7,8 @@ import json
 import requests
 import sqlite3
 import lzo
+import signal
+from functools import cache
 from sage.all import CFiniteSequences, QQ, sage_eval, var
 
 OEIS_DATA_DIR = 'oeis_data'
@@ -16,6 +18,7 @@ SEQUENCE_MODE = "lzo"
 R1 = '^a\(n\)\s\=\s(.*)\.\s\-\s\_(.*)\_\,(.*)$'
 R2 = '^a\(n\)\s\=\s(.*)\.$'
 R3 = 'a\(n\)\s\=\s(.*)\.|(\s\-\s\_(.*)\_\,(.*))$'
+
 
 def regex_match(r,exp):
   """
@@ -30,6 +33,33 @@ def regex_match(r,exp):
   except: return None
 
 
+@cache
+def string_to_exp(s):
+  """
+  Eval a string to a sage expression.
+  Args:
+      String.
+  Returns:
+      Expresion.
+  """
+  return sage_eval(s,locals={'n':var('x')})
+
+
+#@cache
+def simplify(cf):
+  """
+  Simplify expression to a string
+  Args:
+     Expression.
+  Return:
+     String.
+  """
+  try:
+    return str(cf.full_simplify().operands()[0])
+  except:
+    return None
+
+
 def formula_match(formulas, closed_form):
   """
   It extracts every formula from a list in the OEIS format then
@@ -40,16 +70,14 @@ def formula_match(formulas, closed_form):
       True if match.
   """
   if len(closed_form) == 0: return False
-  x = var('x')
-  #z = var('z')
   try:
-    fexp1 = sage_eval(closed_form,locals={'n':x})
+    fexp1 = string_to_exp(closed_form)
   except:
     return False
   for formula in formulas:
     if (rformula := regex_match(R3,formula)) is not None:
       try:
-        fexp2 = sage_eval(rformula,locals={'n':x})
+        fexp2 = string_to_exp(rformula)
         if bool(fexp1 == fexp2): return True
       except: pass
   return False
@@ -114,6 +142,7 @@ def save_cached_sequence(id, data):
             fp.write(lzo.compress(json.dumps(data), 9))
         else:
             fp.write(json.dumps(data).encode("utf8"))
+
 
 def guess_sequence(lst):
     """
@@ -200,6 +229,7 @@ def process_sequences():
     found_count = 0
     hard_count = 0
     not_easy_count = 0
+    BLACKLIST = ['A004921']
     for n, sequence_id in enumerate(yield_unprocessed_ids(cursor)):
         cached_data = load_cached_sequence(sequence_id)
         if cached_data is not None:
@@ -224,19 +254,17 @@ def process_sequences():
             if (cf := check_sequence([int(x) for x in data.split(",")])) is not None:
                 found_count += 1
                 closed_form = str(cf)
-                try:
-                    simplified_closed_form = str(cf.full_simplify().operands()[0])
-                except Exception:
-                    simplified_closed_form = ""
+                simplified_closed_form = simplify(cf)
             is_new = (closed_form is not None and closed_form not in name and closed_form not in formula)  
             is_new |= (simplified_closed_form is not None and simplified_closed_form not in name and simplified_closed_form not in formula)
-            v_regex_match = formula_match(lformula, closed_form) 
+            v_regex_match = False
+            if sequence_id not in BLACKLIST:
+              v_regex_match = formula_match(lformula, closed_form) 
             is_new &= not v_regex_match
 
             sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, keyword=? WHERE id=?"""
             cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new), int(v_regex_match), keyword, sequence_id))
             if is_new:
-            #if regex_match:
                 new_count += 1
                 if keyword.find("hard") > -1: hard_count += 1
                 if keyword.find("easy") == -1: not_easy_count += 1
@@ -255,6 +283,8 @@ def process_sequences():
                 if found_count > 0 and new_count > 0:
                   print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f, RATIO(P/N): %.3f, HARD: %d, NOT EASY: %d"
                       % (proc, found_count, new_count, proc / found_count, found_count / new_count, proc/new_count, hard_count, not_easy_count))
+                print(string_to_exp.cache_info())
+
         else:
             fail_count += 1
             if fail_count == 10:
