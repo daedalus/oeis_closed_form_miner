@@ -189,6 +189,7 @@ def process_sequences():
     new_count = 0
     found_count = 0
     hard_count = 0
+    not_easy_count = 0
     for n, sequence_id in enumerate(yield_unprocessed_ids(cursor)):
         cached_data = load_cached_sequence(sequence_id)
         if cached_data is not None:
@@ -227,6 +228,7 @@ def process_sequences():
             #if regex_match:
                 new_count += 1
                 if keyword.find("hard") > -1: hard_count += 1
+                if keyword.find("easy") == -1: not_easy_count += 1
                 print(80 * "=")
                 print("ID:", sequence_id)
                 print("NAME:", name)
@@ -240,8 +242,8 @@ def process_sequences():
                 print("keywords:", keyword)
                 print(80 * "-")
                 if found_count > 0 and new_count > 0:
-                  print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f, RATIO(P/N): %.3f, HARD: %d"
-                      % (proc, found_count, new_count, proc / found_count, found_count / new_count, proc/new_count, hard_count))
+                  print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f, RATIO(P/N): %.3f, HARD: %d, NOT EASY: %d"
+                      % (proc, found_count, new_count, proc / found_count, found_count / new_count, proc/new_count, hard_count, not_easy_count))
         else:
             fail_count += 1
             if fail_count == 10:
