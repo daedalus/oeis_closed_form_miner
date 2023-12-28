@@ -7,6 +7,7 @@ import json
 import requests
 import sqlite3
 import lzo
+import gzip
 from functools import cache
 from sage.all import CFiniteSequences, QQ, sage_eval, var
 
@@ -14,6 +15,7 @@ ALGORITHMS = ['sage', 'pari']
 OEIS_DATA_DIR = 'oeis_data'
 OEIS_DB_PATH = os.path.join(OEIS_DATA_DIR, 'oeis.db')
 SEQUENCE_MODE = "lzo"
+#SEQUENCE_MODE = "lzogzip"
 
 OEIS_FORMULA_REGEX_1 = '^a\(n\)\s\=\s(.*)\.\s\-\s\_(.*)\_\,(.*)$'
 OEIS_FORMULA_REGEX_2 = '^a\(n\)\s\=\s(.*)\.$'
@@ -142,6 +144,8 @@ def load_cached_sequence(sequence_id):
         with open(file_path, 'rb') as fp:
             if SEQUENCE_MODE == 'lzo':
                 return json.loads(lzo.decompress(fp.read()))
+            elif SEQUENCE_MODE == 'lzogzip':
+                return json.loads(lzo.decompress(gzip.decompress(fp.read())))
             else:
                 return json.loads(fp.read())
 
@@ -166,6 +170,10 @@ def save_cached_sequence(sequence_id, data):
         raw_data = json.dumps(data)
         if SEQUENCE_MODE == 'lzo':
             comp_data = lzo.compress(raw_data,9)
+            fp.write(comp_data)
+            return len(raw_data),len(comp_data)
+        elif SEQUENCE_MODE == 'lzogzip':
+            comp_data = gzip.compress(lzo.compress(raw_data,9),9)
             fp.write(comp_data)
             return len(raw_data),len(comp_data)
         else:
