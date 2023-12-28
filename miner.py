@@ -21,6 +21,8 @@ OEIS_FORMULA_REGEX_1 = '^a\(n\)\s\=\s(.*)\.\s\-\s\_(.*)\_\,(.*)$'
 OEIS_FORMULA_REGEX_2 = '^a\(n\)\s\=\s(.*)\.$'
 OEIS_FORMULA_REGEX_3 = '^a\(n\)\s\=\s(.*)\.|(\s\-\s\_(.*)\_\,(.*))$'
 
+BLACKLIST = ['A004921', 'A131921','A014910'] # Hard sequences for the moment we want to ignore them
+
 
 def regex_match(regex, expression):
     """
@@ -140,6 +142,11 @@ def load_cached_sequence(sequence_id):
     if os.path.isfile(file_path1):
         file_path = file_path1
 
+    file_path2 = os.path.join(OEIS_DATA_DIR,'sequences', n, f'{sequence_id}.{SEQUENCE_MODE}')
+    if os.path.isfile(file_path2):
+        file_path = file_path2
+
+
     if file_path is not None:
         with open(file_path, 'rb') as fp:
             if SEQUENCE_MODE == 'lzo':
@@ -161,7 +168,7 @@ def save_cached_sequence(sequence_id, data):
         data (dict): The sequence data to be cached.
     """
     n = sequence_id[1:4]
-    directory_path = f"{OEIS_DATA_DIR}/{n}"
+    directory_path = f"{OEIS_DATA_DIR}/sequences/{n}"
     if not os.path.isdir(directory_path):
         os.makedirs(directory_path)
 
@@ -284,7 +291,6 @@ def process_sequences():
     found_count = 0
     hard_count = 0
     not_easy_count = 0
-    BLACKLIST = ['A004921', 'A131921']
 
     for n, sequence_id in enumerate(yield_unprocessed_ids(cursor)):
         if sequence_id in BLACKLIST:
