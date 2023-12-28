@@ -39,8 +39,8 @@ This Python script is designed to interact with the On-Line Encyclopedia of Inte
 2. Run the script using `python miner.py`.
 3. The script will create a database, process sequences, and print relevant statistics.
 4. Querying the database for interesting things:
-    1. `echo "select id, closed_form from sequence where keyword like '%hard%' and new=1" | sqlite3 oeis_data/oeis.db`
-    2. `echo "select id, closed_form from sequence where keyword not like '%easy%' and new=1" | sqlite3 oeis_data/oeis.db`
+    1. `echo "select id, algo, closed_form from sequence where keyword like '%hard%' and new=1" | sqlite3 oeis_data/oeis.db`
+    2. `echo "select id, algo, closed_form from sequence where keyword not like '%easy%' and new=1" | sqlite3 oeis_data/oeis.db`
 
 ## Dependencies
 
