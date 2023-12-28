@@ -256,12 +256,19 @@ def yield_unprocessed_ids(cursor):
 def download_only_remaining(start,end):
     conn = sqlite3.connect(OEIS_DB_PATH)
     cursor = conn.cursor()
-    #for n, sequence_id in enumerate(yield_unprocessed_ids(cursor)):
+    fails = 0
     for n in range(start,end):
+        fails = 0
         sequence_id = "A%06d" % n
         raw_data = get_sequence(sequence_id)
-        bz,cz = save_cached_sequence(sequence_id, raw_data)
-        print("sequence id:", sequence_id, bz, "uncompressed bytes", cz, "compressed_bytes")
+        if raw_data is not None:
+            bz,cz = save_cached_sequence(sequence_id, raw_data)
+            print("sequence id:", sequence_id, bz, "uncompressed bytes", cz, "compressed_bytes")
+        else:
+            fails += 1
+        if fails == 10:
+          print("Too many failed...")
+          sys.exit(-1)
 
 def process_sequences():
     """
@@ -321,10 +328,6 @@ def process_sequences():
                     is_new |= (simplified_closed_form is not None and simplified_closed_form not in name and
                                simplified_closed_form not in formula)
                     is_new &= not (v_regex_match := formula_match(l_formula, closed_form))
-
-                    #sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, keyword=?, algo=? WHERE id=?"""
-                    #cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new),
-                    #                     int(v_regex_match), keyword, algo, sequence_id))
 
                     if is_new:
                         new_count += 1
