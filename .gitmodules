@@ -1,0 +1,3 @@
+[submodule "oeis_data"]
+	path = oeis_data
+	url = git@github.com:daedalus/oeis_data.git
