@@ -17,7 +17,7 @@ SEQUENCE_MODE = "lzo"
 
 OEIS_FORMULA_REGEX_1 = '^a\(n\)\s\=\s(.*)\.\s\-\s\_(.*)\_\,(.*)$'
 OEIS_FORMULA_REGEX_2 = '^a\(n\)\s\=\s(.*)\.$'
-OEIS_FORMULA_REGEX_3 = 'a\(n\)\s\=\s(.*)\.|(\s\-\s\_(.*)\_\,(.*))$'
+OEIS_FORMULA_REGEX_3 = '^a\(n\)\s\=\s(.*)\.|(\s\-\s\_(.*)\_\,(.*))$'
 
 
 def regex_match(regex, expression):
@@ -163,11 +163,14 @@ def save_cached_sequence(sequence_id, data):
 
     file_path = os.path.join(directory_path, f'{sequence_id}.{SEQUENCE_MODE}')
     with open(file_path, 'wb') as fp:
+        raw_data = json.dumps(data)
         if SEQUENCE_MODE == 'lzo':
-            fp.write(lzo.compress(json.dumps(data), 9))
+            comp_data = lzo.compress(raw_data,9)
+            fp.write(comp_data)
+            return len(raw_data),len(comp_data)
         else:
-            fp.write(json.dumps(data).encode("utf8"))
-
+            fp.write(raw_data.encode("utf8"))
+            return len(raw_data),0
 
 def guess_sequence(lst):
     """
@@ -242,6 +245,16 @@ def yield_unprocessed_ids(cursor):
         yield row[0]
 
 
+def download_only_remaining(start,end):
+    conn = sqlite3.connect(OEIS_DB_PATH)
+    cursor = conn.cursor()
+    #for n, sequence_id in enumerate(yield_unprocessed_ids(cursor)):
+    for n in range(start,end):
+        sequence_id = "A%06d" % n
+        raw_data = get_sequence(sequence_id)
+        bz,cz = save_cached_sequence(sequence_id, raw_data)
+        print("sequence id:", sequence_id, bz, "uncompressed bytes", cz, "compressed_bytes")
+
 def process_sequences():
     """
     Processes sequences from the generator:
@@ -285,10 +298,14 @@ def process_sequences():
             closed_form = ""
             simplified_closed_form = ""
             algo = None
+            is_new = False
+            v_regex_match = False
+           
             if (cf_algo := check_sequence([int(x) for x in data.split(",")])) is not None:
                 cf, algo = cf_algo
                 found_count += 1
                 closed_form = str(cf)
+
                 if len(closed_form) > 1 and not (cf.is_integer() and cf.is_constant()):
                     simplified_closed_form = simplify_expression(cf)
 
@@ -297,9 +314,9 @@ def process_sequences():
                                simplified_closed_form not in formula)
                     is_new &= not (v_regex_match := formula_match(l_formula, closed_form))
 
-                    sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, keyword=?, algo=? WHERE id=?"""
-                    cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new),
-                                         int(v_regex_match), keyword, algo, sequence_id))
+                    #sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, keyword=?, algo=? WHERE id=?"""
+                    #cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new),
+                    #                     int(v_regex_match), keyword, algo, sequence_id))
 
                     if is_new:
                         new_count += 1
@@ -325,7 +342,11 @@ def process_sequences():
                                   % (proc, found_count, new_count, proc / found_count, found_count / new_count,
                                      proc / new_count, hard_count, not_easy_count))
                         print(string_to_expression.cache_info())
-
+            
+            sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, keyword=?, algo=? WHERE id=?"""
+            cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new),
+                int(v_regex_match), keyword, algo, sequence_id))
+ 
         else:
             fail_count += 1
             if fail_count == 10:
@@ -338,5 +359,7 @@ def process_sequences():
 
 if __name__ == "__main__":
     create_database(368_000)
-    process_sequences()
-
+    if len(sys.argv) > 1 and sys.argv[1] == "-d":
+        download_only_remaining(int(sys.argv[2]),int(sys.argv[3]))
+    else:
+        process_sequences()
