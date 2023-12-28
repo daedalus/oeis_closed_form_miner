@@ -7,134 +7,161 @@ import json
 import requests
 import sqlite3
 import lzo
-import signal
 from functools import cache
 from sage.all import CFiniteSequences, QQ, sage_eval, var
 
-ALGOS = ['sage','pari'] #,'bm']
+ALGORITHMS = ['sage', 'pari']
 OEIS_DATA_DIR = 'oeis_data'
 OEIS_DB_PATH = os.path.join(OEIS_DATA_DIR, 'oeis.db')
 SEQUENCE_MODE = "lzo"
 
-R1 = '^a\(n\)\s\=\s(.*)\.\s\-\s\_(.*)\_\,(.*)$'
-R2 = '^a\(n\)\s\=\s(.*)\.$'
-R3 = 'a\(n\)\s\=\s(.*)\.|(\s\-\s\_(.*)\_\,(.*))$'
+OEIS_FORMULA_REGEX_1 = '^a\(n\)\s\=\s(.*)\.\s\-\s\_(.*)\_\,(.*)$'
+OEIS_FORMULA_REGEX_2 = '^a\(n\)\s\=\s(.*)\.$'
+OEIS_FORMULA_REGEX_3 = 'a\(n\)\s\=\s(.*)\.|(\s\-\s\_(.*)\_\,(.*))$'
 
 
-def regex_match(r,exp):
-  """
-  Matches an expresion (formula in the OEIS format) to a regex:
-  Args: 
-      exp: expresion.
-  Returns:
-      A string representation of a formula.
-  """
-  try:
-      if len(b:=re.match(r,exp).groups()) > 0: return b[0]
-  except: return None
+def regex_match(regex, expression):
+    """
+    Matches an expression (formula in the OEIS format) to a regex.
+
+    Args:
+        regex (str): Regular expression pattern.
+        expression (str): Expression to match.
+
+    Returns:
+        str or None: A string representation of a formula.
+    """
+    try:
+        match_groups = re.match(regex, expression).groups()
+        if match_groups and len(match_groups) > 0:
+            return match_groups[0]
+    except Exception:
+        return None
 
 
 @cache
-def string_to_exp(s):
-  """
-  Eval a string to a sage expression.
-  Args:
-      String.
-  Returns:
-      Expresion.
-  """
-  return sage_eval(s,locals={'n':var('x')})
+def string_to_expression(s):
+    """
+    Evaluate a string to a SageMath expression.
+
+    Args:
+        s (str): Input string.
+
+    Returns:
+        Expression: A SageMath expression.
+    """
+    return sage_eval(s, locals={'n': var('x')})
 
 
-#@cache
-def simplify(cf):
-  """
-  Simplify expression to a string
-  Args:
-     Expression.
-  Return:
-     String.
-  """
-  try:
-      return str(cf.full_simplify().operands()[0])
-  except:
-      return None
+def simplify_expression(cf):
+    """
+    Simplify expression to a string.
+
+    Args:
+        cf: Expression.
+
+    Returns:
+        str or None: Simplified expression.
+    """
+    try:
+        return str(cf.full_simplify().operands()[0])
+    except Exception:
+        return None
 
 
 def formula_match(formulas, closed_form):
-  """
-  It extracts every formula from a list in the OEIS format then
-  matches every formula in the list to a closed_form.
-  Args:
-      list of formulas, closed_form string.
-  Returns: 
-      True if match.
-  """
-  if len(closed_form) == 0: return False
-  try:
-      fexp1 = string_to_exp(closed_form)
-  except:
-      return False
-  for formula in formulas:
-      if (rformula := regex_match(R3,formula)) is not None:
-          try:
-              fexp2 = string_to_exp(rformula)
-              if bool(fexp1 == fexp2): return True
-          except: pass
-  return False
+    """
+    Extracts every formula from a list in the OEIS format, then matches every formula to a closed_form.
+
+    Args:
+        formulas (list): List of formulas.
+        closed_form (str): Closed form string.
+
+    Returns:
+        bool: True if there is a match.
+    """
+    if len(closed_form) == 0:
+        return False
+
+    try:
+        fexp1 = string_to_expression(closed_form)
+    except Exception:
+        return False
+
+    for formula in formulas:
+        if (r_formula := regex_match(OEIS_FORMULA_REGEX_3, formula)) is not None:
+            try:
+                fexp2 = string_to_expression(r_formula)
+                if bool(fexp1 == fexp2):
+                    return True
+            except Exception:
+                pass
+
+    return False
 
 
-def get_sequence(id):
+def get_sequence(sequence_id):
     """
     Fetches the OEIS sequence information for the given ID from the OEIS website.
 
     Args:
-        id (str): The OEIS sequence ID.
+        sequence_id (str): The OEIS sequence ID.
 
     Returns:
         dict or None: The sequence information in dictionary format or None if fetching fails.
     """
     try:
-        response = requests.get(f"https://oeis.org/search?fmt=json&q=id:{id}")
+        response = requests.get(f"https://oeis.org/search?fmt=json&q=id:{sequence_id}")
         return json.loads(response.content)
     except Exception as e:
         return None
 
 
-def load_cached_sequence(id):
+def load_cached_sequence(sequence_id):
     """
     Loads a previously cached OEIS sequence data from the local storage.
 
     Args:
-        id (str): The OEIS sequence ID.
+        sequence_id (str): The OEIS sequence ID.
 
     Returns:
         dict or None: The cached sequence data in dictionary format or None if not found.
     """
-    n = id[1:4]
+    n = sequence_id[1:4]
     file_path = None
-    if os.path.isfile(file_path0 := os.path.join(OEIS_DATA_DIR, f'{id}.{SEQUENCE_MODE}')): file_path = file_path0
-    if os.path.isfile(file_path1 := os.path.join(OEIS_DATA_DIR, n, f'{id}.{SEQUENCE_MODE}')): file_path = file_path1
+
+    file_path0 = os.path.join(OEIS_DATA_DIR, f'{sequence_id}.{SEQUENCE_MODE}')
+    if os.path.isfile(file_path0):
+        file_path = file_path0
+
+    file_path1 = os.path.join(OEIS_DATA_DIR, n, f'{sequence_id}.{SEQUENCE_MODE}')
+    if os.path.isfile(file_path1):
+        file_path = file_path1
+
     if file_path is not None:
         with open(file_path, 'rb') as fp:
             if SEQUENCE_MODE == 'lzo':
                 return json.loads(lzo.decompress(fp.read()))
             else:
                 return json.loads(fp.read())
+
     return None
 
 
-def save_cached_sequence(id, data):
+def save_cached_sequence(sequence_id, data):
     """
     Saves the OEIS sequence data to the local cache.
 
     Args:
-        id (str): The OEIS sequence ID.
+        sequence_id (str): The OEIS sequence ID.
         data (dict): The sequence data to be cached.
     """
-    n = id[1:4]
-    if not os.path.isdir(d:=f"{OEIS_DATA_DIR}/{n}"): os.system(f"mkdir {d}")
-    file_path = os.path.join(OEIS_DATA_DIR, n,f'{id}.{SEQUENCE_MODE}')
+    n = sequence_id[1:4]
+    directory_path = f"{OEIS_DATA_DIR}/{n}"
+    if not os.path.isdir(directory_path):
+        os.makedirs(directory_path)
+
+    file_path = os.path.join(directory_path, f'{sequence_id}.{SEQUENCE_MODE}')
     with open(file_path, 'wb') as fp:
         if SEQUENCE_MODE == 'lzo':
             fp.write(lzo.compress(json.dumps(data), 9))
@@ -153,10 +180,8 @@ def guess_sequence(lst):
         object or None: The guessed closed form or None if no closed form is found.
     """
     C = CFiniteSequences(QQ)
-    for algo in ALGOS:
-        if (s:= C.guess(lst, algorithm=algo)) != 0:
-            #print(lst,algo,s)
-            #print(s.closed_form())
+    for algo in ALGORITHMS:
+        if (s := C.guess(lst, algorithm=algo)) != 0:
             return s.closed_form(), algo
 
 
@@ -231,10 +256,12 @@ def process_sequences():
     found_count = 0
     hard_count = 0
     not_easy_count = 0
-    BLACKLIST = ['A004921','A131921']
+    BLACKLIST = ['A004921', 'A131921']
+
     for n, sequence_id in enumerate(yield_unprocessed_ids(cursor)):
-        #print(n, sequence_id)
-        if sequence_id in BLACKLIST: continue
+        if sequence_id in BLACKLIST:
+            continue
+
         cached_data = load_cached_sequence(sequence_id)
         if cached_data is not None:
             raw_data = cached_data
@@ -248,11 +275,13 @@ def process_sequences():
             name = raw_data['results'][0]['name']
             data = raw_data['results'][0]['data']
             keyword = raw_data['results'][0]['keyword']
-            lformula,formula = [],''
+            l_formula, formula = [], ''
             if 'formula' in raw_data['results'][0]:
-                lformula = raw_data['results'][0]['formula']
-                formula = json.dumps(lformula)
-            if regex_match(R2, name) is not None: lformula.append(name)
+                l_formula = raw_data['results'][0]['formula']
+                formula = json.dumps(l_formula)
+            if regex_match(OEIS_FORMULA_REGEX_2, name) is not None:
+                l_formula.append(name)
+
             closed_form = ""
             simplified_closed_form = ""
             algo = None
@@ -261,41 +290,48 @@ def process_sequences():
                 found_count += 1
                 closed_form = str(cf)
                 if len(closed_form) > 1 and not (cf.is_integer() and cf.is_constant()):
-                    simplified_closed_form = simplify(cf)
+                    simplified_closed_form = simplify_expression(cf)
 
-                    is_new = (closed_form is not None and closed_form not in name and closed_form not in formula)  
-                    is_new |= (simplified_closed_form is not None and simplified_closed_form not in name and simplified_closed_form not in formula)
-                    is_new &= not (v_regex_match := formula_match(lformula, closed_form))
+                    is_new = (closed_form is not None and closed_form not in name and closed_form not in formula)
+                    is_new |= (simplified_closed_form is not None and simplified_closed_form not in name and
+                               simplified_closed_form not in formula)
+                    is_new &= not (v_regex_match := formula_match(l_formula, closed_form))
 
                     sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, keyword=?, algo=? WHERE id=?"""
-                    cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new), int(v_regex_match), keyword, algo, sequence_id))
+                    cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new),
+                                         int(v_regex_match), keyword, algo, sequence_id))
 
                     if is_new:
                         new_count += 1
-                        if keyword.find("hard") > -1: hard_count += 1
-                        if keyword.find("easy") == -1: not_easy_count += 1
+                        if keyword.find("hard") > -1:
+                            hard_count += 1
+                        if keyword.find("easy") == -1:
+                            not_easy_count += 1
                         print(80 * "=")
                         print("ID:", sequence_id)
                         print("NAME:", name)
                         print(80 * "-")
                         print("CLOSED_FORM:", closed_form, "len:", len(closed_form))
                         if simplified_closed_form is not None and len(simplified_closed_form) > 0:
-                            print("SIMP_CLOSED_FORM:", simplified_closed_form, "len:", len(simplified_closed_form))
+                            print("SIMP_CLOSED_FORM:", simplified_closed_form, "len:",
+                                  len(simplified_closed_form))
                         else:
                             print(sequence_id, "maxima could not simplify", closed_form)
                         print("keywords:", keyword)
-                        print("algo:",algo)
+                        print("algo:", algo)
                         print(80 * "-")
                         if found_count > 0 and new_count > 0:
                             print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f, RATIO(P/N): %.3f, HARD: %d, NOT EASY: %d"
-                                % (proc, found_count, new_count, proc / found_count, found_count / new_count, proc/new_count, hard_count, not_easy_count))
-                        print(string_to_exp.cache_info())
+                                  % (proc, found_count, new_count, proc / found_count, found_count / new_count,
+                                     proc / new_count, hard_count, not_easy_count))
+                        print(string_to_expression.cache_info())
 
         else:
             fail_count += 1
             if fail_count == 10:
                 print("Failed last: %d sequences..." % fail_count)
                 sys.exit(-1)
+
         if n % 10 == 0:
             conn.commit()
 
@@ -303,3 +339,4 @@ def process_sequences():
 if __name__ == "__main__":
     create_database(368_000)
     process_sequences()
+
