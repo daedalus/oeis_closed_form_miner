@@ -36,9 +36,10 @@ This Python script is designed to interact with the On-Line Encyclopedia of Inte
 ## Usage
 
 1. Ensure the required dependencies are installed, including SageMath: `pip install -r requirements.txt`.
-2. Run the script using `python miner.py`.
-3. The script will create a database, process sequences, and print relevant statistics.
-4. Querying the database for interesting things:
+2. Download the oeis data: `git submodule init`.
+3. Run the script using `python miner.py`.
+4. The script will create a database, process sequences, and print relevant statistics.
+5. Querying the database for interesting things:
     1. `echo "select id, algo, closed_form from sequence where keyword like '%hard%' and new=1" | sqlite3 oeis_data/oeis.db`
     2. `echo "select id, algo, closed_form from sequence where keyword not like '%easy%' and new=1" | sqlite3 oeis_data/oeis.db`
 
