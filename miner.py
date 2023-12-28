@@ -11,6 +11,7 @@ import signal
 from functools import cache
 from sage.all import CFiniteSequences, QQ, sage_eval, var
 
+ALGOS = ['sage','pari'] #,'bm']
 OEIS_DATA_DIR = 'oeis_data'
 OEIS_DB_PATH = os.path.join(OEIS_DATA_DIR, 'oeis.db')
 SEQUENCE_MODE = "lzo"
@@ -29,7 +30,7 @@ def regex_match(r,exp):
       A string representation of a formula.
   """
   try:
-    if len(b:=re.match(r,exp).groups()) > 0: return b[0]
+      if len(b:=re.match(r,exp).groups()) > 0: return b[0]
   except: return None
 
 
@@ -55,9 +56,9 @@ def simplify(cf):
      String.
   """
   try:
-    return str(cf.full_simplify().operands()[0])
+      return str(cf.full_simplify().operands()[0])
   except:
-    return None
+      return None
 
 
 def formula_match(formulas, closed_form):
@@ -71,15 +72,15 @@ def formula_match(formulas, closed_form):
   """
   if len(closed_form) == 0: return False
   try:
-    fexp1 = string_to_exp(closed_form)
+      fexp1 = string_to_exp(closed_form)
   except:
-    return False
+      return False
   for formula in formulas:
-    if (rformula := regex_match(R3,formula)) is not None:
-      try:
-        fexp2 = string_to_exp(rformula)
-        if bool(fexp1 == fexp2): return True
-      except: pass
+      if (rformula := regex_match(R3,formula)) is not None:
+          try:
+              fexp2 = string_to_exp(rformula)
+              if bool(fexp1 == fexp2): return True
+          except: pass
   return False
 
 
@@ -112,10 +113,8 @@ def load_cached_sequence(id):
     """
     n = id[1:4]
     file_path = None
-    file_path0 = os.path.join(OEIS_DATA_DIR, f'{id}.{SEQUENCE_MODE}')
-    file_path1 = os.path.join(OEIS_DATA_DIR, n, f'{id}.{SEQUENCE_MODE}')
-    if os.path.isfile(file_path0): file_path = file_path0
-    if os.path.isfile(file_path1): file_path = file_path1
+    if os.path.isfile(file_path0 := os.path.join(OEIS_DATA_DIR, f'{id}.{SEQUENCE_MODE}')): file_path = file_path0
+    if os.path.isfile(file_path1 := os.path.join(OEIS_DATA_DIR, n, f'{id}.{SEQUENCE_MODE}')): file_path = file_path1
     if file_path is not None:
         with open(file_path, 'rb') as fp:
             if SEQUENCE_MODE == 'lzo':
@@ -134,8 +133,7 @@ def save_cached_sequence(id, data):
         data (dict): The sequence data to be cached.
     """
     n = id[1:4]
-    d = f"{OEIS_DATA_DIR}/{n}"
-    if not os.path.isdir(d): os.system(f"mkdir {d}")
+    if not os.path.isdir(d:=f"{OEIS_DATA_DIR}/{n}"): os.system(f"mkdir {d}")
     file_path = os.path.join(OEIS_DATA_DIR, n,f'{id}.{SEQUENCE_MODE}')
     with open(file_path, 'wb') as fp:
         if SEQUENCE_MODE == 'lzo':
@@ -154,7 +152,12 @@ def guess_sequence(lst):
     Returns:
         object or None: The guessed closed form or None if no closed form is found.
     """
-    return None if (s := CFiniteSequences(QQ).guess(lst)) == 0 else s.closed_form()
+    C = CFiniteSequences(QQ)
+    for algo in ALGOS:
+        if (s:= C.guess(lst, algorithm=algo)) != 0:
+            #print(lst,algo,s)
+            #print(s.closed_form())
+            return s.closed_form(), algo
 
 
 def check_sequence(data, items=10):
@@ -168,10 +171,9 @@ def check_sequence(data, items=10):
     Returns:
         object or None: The guessed closed form or None if no closed form is found.
     """
-    seq = data[:items]
-    if len(seq) > 7 and (result := guess_sequence(seq)) is not None:
-        seq = data
-        return guess_sequence(seq)
+    first_terms_data = data[:items]
+    if len(first_terms_data) > 7 and (result := guess_sequence(first_terms_data)) is not None:
+        return guess_sequence(data)
 
 
 def process_file():
@@ -194,7 +196,7 @@ def create_database(length):
         conn = sqlite3.connect(OEIS_DB_PATH)
         cur = conn.cursor()
         cur.execute("CREATE TABLE sequence(id, name TEXT, data TEXT, formula TEXT, closed_form TEXT, "
-                    "simplified_closed_form TEXT, new INT, regex_match INT, keyword TEXT)")
+                    "simplified_closed_form TEXT, new INT, regex_match INT, keyword TEXT, algo TEXT)")
         for n in range(1, length + 1):
             cur.execute("INSERT INTO sequence (id) VALUES ('A%06d');" % n)
         conn.commit()
@@ -229,8 +231,10 @@ def process_sequences():
     found_count = 0
     hard_count = 0
     not_easy_count = 0
-    BLACKLIST = ['A004921']
+    BLACKLIST = ['A004921','A131921']
     for n, sequence_id in enumerate(yield_unprocessed_ids(cursor)):
+        #print(n, sequence_id)
+        if sequence_id in BLACKLIST: continue
         cached_data = load_cached_sequence(sequence_id)
         if cached_data is not None:
             raw_data = cached_data
@@ -246,44 +250,46 @@ def process_sequences():
             keyword = raw_data['results'][0]['keyword']
             lformula,formula = [],''
             if 'formula' in raw_data['results'][0]:
-              lformula = raw_data['results'][0]['formula']
-              formula = json.dumps(lformula)
+                lformula = raw_data['results'][0]['formula']
+                formula = json.dumps(lformula)
             if regex_match(R2, name) is not None: lformula.append(name)
             closed_form = ""
             simplified_closed_form = ""
-            if (cf := check_sequence([int(x) for x in data.split(",")])) is not None:
+            algo = None
+            if (cf_algo := check_sequence([int(x) for x in data.split(",")])) is not None:
+                cf, algo = cf_algo
                 found_count += 1
                 closed_form = str(cf)
-                simplified_closed_form = simplify(cf)
-            is_new = (closed_form is not None and closed_form not in name and closed_form not in formula)  
-            is_new |= (simplified_closed_form is not None and simplified_closed_form not in name and simplified_closed_form not in formula)
-            v_regex_match = False
-            if sequence_id not in BLACKLIST:
-              v_regex_match = formula_match(lformula, closed_form) 
-            is_new &= not v_regex_match
+                if len(closed_form) > 1 and not (cf.is_integer() and cf.is_constant()):
+                    simplified_closed_form = simplify(cf)
 
-            sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, keyword=? WHERE id=?"""
-            cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new), int(v_regex_match), keyword, sequence_id))
-            if is_new:
-                new_count += 1
-                if keyword.find("hard") > -1: hard_count += 1
-                if keyword.find("easy") == -1: not_easy_count += 1
-                print(80 * "=")
-                print("ID:", sequence_id)
-                print("NAME:", name)
-                print(80 * "-")
-                print("CLOSED_FORM:", closed_form, "len:", len(closed_form))
-                if simplified_closed_form is not None and len(simplified_closed_form) > 0:
-                    print("SIMP_CLOSED_FORM:", simplified_closed_form, "len:", len(simplified_closed_form))
-                else:
-                    print(sequence_id, "maxima could not simplify", closed_form)
-                print("regex_match:", v_regex_match)
-                print("keywords:", keyword)
-                print(80 * "-")
-                if found_count > 0 and new_count > 0:
-                  print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f, RATIO(P/N): %.3f, HARD: %d, NOT EASY: %d"
-                      % (proc, found_count, new_count, proc / found_count, found_count / new_count, proc/new_count, hard_count, not_easy_count))
-                print(string_to_exp.cache_info())
+                    is_new = (closed_form is not None and closed_form not in name and closed_form not in formula)  
+                    is_new |= (simplified_closed_form is not None and simplified_closed_form not in name and simplified_closed_form not in formula)
+                    is_new &= not (v_regex_match := formula_match(lformula, closed_form))
+
+                    sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, keyword=?, algo=? WHERE id=?"""
+                    cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new), int(v_regex_match), keyword, algo, sequence_id))
+
+                    if is_new:
+                        new_count += 1
+                        if keyword.find("hard") > -1: hard_count += 1
+                        if keyword.find("easy") == -1: not_easy_count += 1
+                        print(80 * "=")
+                        print("ID:", sequence_id)
+                        print("NAME:", name)
+                        print(80 * "-")
+                        print("CLOSED_FORM:", closed_form, "len:", len(closed_form))
+                        if simplified_closed_form is not None and len(simplified_closed_form) > 0:
+                            print("SIMP_CLOSED_FORM:", simplified_closed_form, "len:", len(simplified_closed_form))
+                        else:
+                            print(sequence_id, "maxima could not simplify", closed_form)
+                        print("keywords:", keyword)
+                        print("algo:",algo)
+                        print(80 * "-")
+                        if found_count > 0 and new_count > 0:
+                            print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f, RATIO(P/N): %.3f, HARD: %d, NOT EASY: %d"
+                                % (proc, found_count, new_count, proc / found_count, found_count / new_count, proc/new_count, hard_count, not_easy_count))
+                        print(string_to_exp.cache_info())
 
         else:
             fail_count += 1
