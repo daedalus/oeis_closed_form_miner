@@ -36,7 +36,7 @@ This Python script is designed to interact with the On-Line Encyclopedia of Inte
 ## Usage
 
 1. Ensure the required dependencies are installed, including SageMath: `pip install -r requirements.txt`.
-2. Download the oeis data: `git submodule init`.
+2. Download the oeis data: `git submodule init` and `git submodule update --remote`.
 3. Run the script using `python miner.py`.
 4. The script will create a database, process sequences, and print relevant statistics.
 5. Querying the database for interesting things:
