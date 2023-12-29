@@ -83,7 +83,8 @@ def formula_match_regex(RE, formulas):
               matched.append(formula_exp)
           except Exception:
               pass
-  return matched
+  if len(matched) > 0:
+      return matched
 
 
 def formula_match_exp(formula_exps, closed_form_exp):
@@ -318,8 +319,8 @@ def process_sequences():
             if 'formula' in raw_data['results'][0]:
                 l_formula = raw_data['results'][0]['formula']
                 formula = json.dumps(l_formula)
-            if regex_match(OEIS_FORMULA_REGEX_2, name) is not None:
-                l_formula.append(name)
+            if (rname := regex_match(OEIS_FORMULA_REGEX_2, name)) is not None:
+                l_formula.append(rname)
 
             closed_form = ""
             simplified_closed_form = ""
@@ -374,10 +375,14 @@ def process_sequences():
                                   % (proc, found_count, new_count, proc / found_count, found_count / new_count,
                                      proc / new_count, hard_count, not_easy_count))
                         print(string_to_expression.cache_info())
+           
+            formula_exps_str = None
+            if formula_exps is not None:
+              formula_exps_str = str([str(f) for f in formula_exps]) 
             
             sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, parsed_formulas=?, keyword=?, xref=?, algo=? WHERE id=?"""
             cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new),
-                int(v_regex_match), str([str(f) for f in formula_exps]), keyword, xref, algo, sequence_id))
+                int(v_regex_match), formula_exps_str, keyword, xref, algo, sequence_id))
  
         else:
             fail_count += 1
