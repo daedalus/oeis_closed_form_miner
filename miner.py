@@ -433,11 +433,6 @@ def process_xrefs():
     for row in cursor.execute("select id, parsed_formulas from sequence where parsed_formulas is not NULL order by id;"): 
         sequence_id = row[0]
 
-        #if row[2] is not None:
-        #    xrefs = eval(row[2])
-        #else:
-        #    xrefs = []
-
         if row[1] is not None:
             parsed_formulas = json.loads(row[1])
 
@@ -459,19 +454,18 @@ def process_xrefs():
         if id_a not in BLACKLIST:
             for j in range(i + 1, len(sk)):
                 id_b = sk[j]
-                if id_a != id_b:
-                    if id_b not in A[id_a] and id_b not in BLACKLIST:
-                        l_fexp_b = D[id_b]
-                        for fexp_a in l_fexp_a:
-                            for fexp_b in l_fexp_b:
-                                if fexp_a == fexp_b:
-                                    print("="*80)
-                                    print("new xref:")
-                                    print("seq a:", id_a, fexp_a, "seq b:", id_b, fexp_b)
-                                    print("-"*80)
-                                    sql = "insert into matches values (?,?,?,?);"
-                                    cur.execute(sql,(id_a,id_b, str(fexp_a), str(fexp_b)))
-                        A[id_a].append(id_b)      
+                if id_b not in A[id_a] and id_b not in BLACKLIST:
+                    l_fexp_b = D[id_b]
+                    for fexp_a in l_fexp_a:
+                        for fexp_b in l_fexp_b:
+                            if fexp_a == fexp_b:
+                                print("="*80)
+                                print("new xref:")
+                                print("seq a:", id_a, fexp_a, "seq b:", id_b, fexp_b)
+                                print("-"*80)
+                                sql = "insert into matches values (?,?,?,?);"
+                                cur.execute(sql,(id_a,id_b, str(fexp_a), str(fexp_b)))
+                    A[id_a].append(id_b)      
         compress_pickle(XREF_PKL_FILE, A)
         print(id_a, "processed xrefs:", len(A[id_a]))
 
