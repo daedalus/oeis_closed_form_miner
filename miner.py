@@ -25,7 +25,7 @@ OEIS_FORMULA_REGEX_3 = '^a\(n\)\s\=\s(.*)\.|(\s\-\s\_(.*)\_\,(.*))$'
 OEIS_FORMULA_REGEX_4 = '^a\(n\)\s\=\s(.*)\.$|a\(n\)\s\=\s(.*)\.(\s\-\s\_(.*)\_\,(.*))$'
 OEIS_XREF_REGEX = 'A[0-9]{6}'
 
-BLACKLIST = ['A004921', 'A131921','A014910'] # Hard sequences for the moment we want to ignore them
+BLACKLIST = ['A004921', 'A131921','A014910', 'A022898', 'A022901'] # Hard sequences for the moment we want to ignore them
 
 #@cache
 def regex_match(regex, expression):
@@ -314,6 +314,8 @@ def process_sequences():
     for n, sequence_id in enumerate(yield_unprocessed_ids(cursor)):
         if sequence_id in BLACKLIST:
             continue
+        sys.stderr.write("processing %s...           \r" % sequence_id)
+        sys.stderr.flush()
         cached_data = load_cached_sequence(sequence_id)
         if cached_data is not None:
             raw_data = cached_data
