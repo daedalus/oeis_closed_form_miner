@@ -20,11 +20,12 @@ SEQUENCE_MODE = "lzo"
 OEIS_FORMULA_REGEX_1 = '^a\(n\)\s\=\s(.*)\.\s\-\s\_(.*)\_\,(.*)$'
 OEIS_FORMULA_REGEX_2 = '^a\(n\)\s\=\s(.*)\.$'
 OEIS_FORMULA_REGEX_3 = '^a\(n\)\s\=\s(.*)\.|(\s\-\s\_(.*)\_\,(.*))$'
+OEIS_FORMULA_REGEX_4 = '^a\(n\)\s\=\s(.*)\.$|a\(n\)\s\=\s(.*)\.(\s\-\s\_(.*)\_\,(.*))$'
 OEIS_XREF_REGEX = 'A[0-9]{6}'
 
 BLACKLIST = ['A004921', 'A131921','A014910'] # Hard sequences for the moment we want to ignore them
 
-
+#@cache
 def regex_match(regex, expression):
     """
     Matches an expression (formula in the OEIS format) to a regex.
@@ -39,12 +40,15 @@ def regex_match(regex, expression):
     try:
         match_groups = re.match(regex, expression).groups()
         if match_groups and len(match_groups) > 0:
-            return match_groups[0]
+            if match_groups[0] is None:
+                return match_groups[1]
+            else:
+                return match_groups[0]
     except Exception:
         return None
 
 
-@cache
+#@cache
 def string_to_expression(s):
     """
     Evaluate a string to a SageMath expression.
@@ -55,7 +59,7 @@ def string_to_expression(s):
     Returns:
         Expression: A SageMath expression.
     """
-    return sage_eval(s, locals={'n': var('x')})
+    return sage_eval(s, locals={'n': var('x'),'x':var('x')})
 
 
 def simplify_expression(cf):
@@ -73,14 +77,20 @@ def simplify_expression(cf):
     except Exception:
         return None
 
-
+@cache
 def formula_match_regex(RE, formulas):
+  """
+  Matches a formula to a regex then validates it as an expression.
+  Args:
+    List of formulas in str format.
+  Returns:
+    List of valid expressions.
+  """
   matched = []
   for formula in formulas:
       if (r_formula := regex_match(RE, formula)) is not None:
           try:
-              formula_exp = string_to_expression(r_formula)
-              matched.append(formula_exp)
+              matched.append(string_to_expression(r_formula))
           except Exception:
               pass
   if len(matched) > 0:
@@ -89,7 +99,7 @@ def formula_match_regex(RE, formulas):
 
 def formula_match_exp(formula_exps, closed_form_exp):
     """
-    Extracts every formula from a list in the OEIS format, then matches every formula to a closed_form.
+    Matches every formula expression to a closed form expression.
 
     Args:
         formulas (list): List of formulas expressions.
@@ -289,6 +299,9 @@ def process_sequences():
     """
     conn = sqlite3.connect(OEIS_DB_PATH)
     cursor = conn.cursor()
+ 
+    #conn.set_trace_callback(print)
+
     fail_count = 0
     new_count = 0
     found_count = 0
@@ -298,7 +311,6 @@ def process_sequences():
     for n, sequence_id in enumerate(yield_unprocessed_ids(cursor)):
         if sequence_id in BLACKLIST:
             continue
-
         cached_data = load_cached_sequence(sequence_id)
         if cached_data is not None:
             raw_data = cached_data
@@ -328,7 +340,7 @@ def process_sequences():
             is_new = False
             v_regex_match = False
 
-            formula_exps = formula_match_regex(OEIS_FORMULA_REGEX_3, l_formula)
+            formula_exps = formula_match_regex(OEIS_FORMULA_REGEX_4, tuple(l_formula))
            
             if (cf_algo := check_sequence([int(x) for x in data.split(",")])) is not None:
                 cf, algo = cf_algo
@@ -347,7 +359,7 @@ def process_sequences():
                     except:
                       closed_form_exp = None
 
-                    if closed_form_exp is not None:
+                    if closed_form_exp is not None and formula_exps is not None:
                       is_new &= not (v_regex_match := formula_match_exp(formula_exps, closed_form_exp))
                    
                     if is_new:
@@ -374,12 +386,14 @@ def process_sequences():
                             print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f, RATIO(P/N): %.3f, HARD: %d, NOT EASY: %d"
                                   % (proc, found_count, new_count, proc / found_count, found_count / new_count,
                                      proc / new_count, hard_count, not_easy_count))
-                        print(string_to_expression.cache_info())
+                        print(formula_match_regex.cache_info())
+
            
             formula_exps_str = None
             if formula_exps is not None:
-              formula_exps_str = str([str(f) for f in formula_exps]) 
-            
+              formula_exps_str = json.dumps([str(f) for f in formula_exps]) 
+
+
             sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, parsed_formulas=?, keyword=?, xref=?, algo=? WHERE id=?"""
             cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new),
                 int(v_regex_match), formula_exps_str, keyword, xref, algo, sequence_id))
@@ -393,10 +407,62 @@ def process_sequences():
         if n % 10 == 0:
             conn.commit()
 
+def process_xrefs():
+    """
+    Tries to find new xrefs comparing equivalences in parsed formula expressions.
+    """
+    conn = sqlite3.connect(OEIS_DB_PATH)
+    cursor = conn.cursor()
+
+    fail_count = 0
+    new_count = 0
+    found_count = 0
+    hard_count = 0
+    not_easy_count = 0
+  
+    D={}
+
+    for row in cursor.execute("select id, parsed_formulas from sequence where parsed_formulas is not NULL order by id;"): 
+        sequence_id = row[0]
+
+        #if row[2] is not None:
+        #    xrefs = eval(row[2])
+        #else:
+        #    xrefs = []
+
+        if row[1] is not None:
+            parsed_formulas = json.loads(row[1])
+
+            D[sequence_id] = []
+      
+            for formula in parsed_formulas:
+                if len(formula) > 1:
+                    print(sequence_id, formula, len(formula))
+                    fexp = string_to_expression(formula)           
+                    if fexp not in D[sequence_id]:
+                        D[sequence_id].append(fexp)
+       
+
+    sk = sorted(D.keys())
+    for a in sk:
+        for b in sk:
+            if a != b:
+                l_fexp_a = D[a]
+                l_fexp_b = D[b]
+                for fexp_a in l_fexp_a:
+                    for fexp_b in l_fexp_b:
+                        if fexp_a == fexp_b:
+                            print("="*80)
+                            print("new xref:")
+                            print("seq a:", a, fexp_a, "seq b:", b, fexp_b)
+                            print("-"*80)
+
 
 if __name__ == "__main__":
     create_database(368_000)
     if len(sys.argv) > 1 and sys.argv[1] == "-d":
         download_only_remaining(int(sys.argv[2]),int(sys.argv[3]))
+    elif len(sys.argv) > 1 and sys.argv[1] == "-x":
+        process_xrefs()
     else:
         process_sequences()
