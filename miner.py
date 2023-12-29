@@ -20,6 +20,7 @@ SEQUENCE_MODE = "lzo"
 OEIS_FORMULA_REGEX_1 = '^a\(n\)\s\=\s(.*)\.\s\-\s\_(.*)\_\,(.*)$'
 OEIS_FORMULA_REGEX_2 = '^a\(n\)\s\=\s(.*)\.$'
 OEIS_FORMULA_REGEX_3 = '^a\(n\)\s\=\s(.*)\.|(\s\-\s\_(.*)\_\,(.*))$'
+OEIS_XREF_REGEX = 'A[0-9]{6}'
 
 BLACKLIST = ['A004921', 'A131921','A014910'] # Hard sequences for the moment we want to ignore them
 
@@ -73,34 +74,35 @@ def simplify_expression(cf):
         return None
 
 
-def formula_match(formulas, closed_form):
+def formula_match_regex(RE, formulas):
+  matched = []
+  for formula in formulas:
+      if (r_formula := regex_match(RE, formula)) is not None:
+          try:
+              formula_exp = string_to_expression(r_formula)
+              matched.append(formula_exp)
+          except Exception:
+              pass
+  return matched
+
+
+def formula_match_exp(formula_exps, closed_form_exp):
     """
     Extracts every formula from a list in the OEIS format, then matches every formula to a closed_form.
 
     Args:
-        formulas (list): List of formulas.
-        closed_form (str): Closed form string.
+        formulas (list): List of formulas expressions.
+        closed_form_exp: Closed form expression.
 
     Returns:
         bool: True if there is a match.
     """
-    if len(closed_form) == 0:
-        return False
-
-    try:
-        fexp1 = string_to_expression(closed_form)
-    except Exception:
-        return False
-
-    for formula in formulas:
-        if (r_formula := regex_match(OEIS_FORMULA_REGEX_3, formula)) is not None:
-            try:
-                fexp2 = string_to_expression(r_formula)
-                if bool(fexp1 == fexp2):
-                    return True
-            except Exception:
-                pass
-
+    for f_exp in formula_exps:
+        try:
+            if bool(f_exp == closed_form_exp):
+                return True
+        except Exception:
+            pass
     return False
 
 
@@ -239,7 +241,7 @@ def create_database(length):
         conn = sqlite3.connect(OEIS_DB_PATH)
         cur = conn.cursor()
         cur.execute("CREATE TABLE sequence(id, name TEXT, data TEXT, formula TEXT, closed_form TEXT, "
-                    "simplified_closed_form TEXT, new INT, regex_match INT, keyword TEXT, algo TEXT)")
+                    "simplified_closed_form TEXT, new INT, regex_match INT, parsed_formulas TEXT, keyword TEXT, xref TEXT, algo TEXT)")
         for n in range(1, length + 1):
             cur.execute("INSERT INTO sequence (id) VALUES ('A%06d');" % n)
         conn.commit()
@@ -309,6 +311,9 @@ def process_sequences():
             name = raw_data['results'][0]['name']
             data = raw_data['results'][0]['data']
             keyword = raw_data['results'][0]['keyword']
+            xref = None
+            if 'xref' in raw_data['results'][0]:
+              xref = str(re.findall(OEIS_XREF_REGEX, str(raw_data['results'][0]['xref'])))
             l_formula, formula = [], ''
             if 'formula' in raw_data['results'][0]:
                 l_formula = raw_data['results'][0]['formula']
@@ -321,6 +326,8 @@ def process_sequences():
             algo = None
             is_new = False
             v_regex_match = False
+
+            formula_exps = formula_match_regex(OEIS_FORMULA_REGEX_3, l_formula)
            
             if (cf_algo := check_sequence([int(x) for x in data.split(",")])) is not None:
                 cf, algo = cf_algo
@@ -333,8 +340,15 @@ def process_sequences():
                     is_new = (closed_form is not None and closed_form not in name and closed_form not in formula)
                     is_new |= (simplified_closed_form is not None and simplified_closed_form not in name and
                                simplified_closed_form not in formula)
-                    is_new &= not (v_regex_match := formula_match(l_formula, closed_form))
+                    
+                    try:
+                      closed_form_exp = string_to_expression(closed_form)
+                    except:
+                      closed_form_exp = None
 
+                    if closed_form_exp is not None:
+                      is_new &= not (v_regex_match := formula_match_exp(formula_exps, closed_form_exp))
+                   
                     if is_new:
                         new_count += 1
                         if keyword.find("hard") > -1:
@@ -352,6 +366,7 @@ def process_sequences():
                         else:
                             print(sequence_id, "maxima could not simplify", closed_form)
                         print("keywords:", keyword)
+                        print("xref:",xref)
                         print("algo:", algo)
                         print(80 * "-")
                         if found_count > 0 and new_count > 0:
@@ -360,9 +375,9 @@ def process_sequences():
                                      proc / new_count, hard_count, not_easy_count))
                         print(string_to_expression.cache_info())
             
-            sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, keyword=?, algo=? WHERE id=?"""
+            sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, parsed_formulas=?, keyword=?, xref=?, algo=? WHERE id=?"""
             cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new),
-                int(v_regex_match), keyword, algo, sequence_id))
+                int(v_regex_match), str([str(f) for f in formula_exps]), keyword, xref, algo, sequence_id))
  
         else:
             fail_count += 1
