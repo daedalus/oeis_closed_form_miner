@@ -430,6 +430,8 @@ def process_xrefs():
     except:
         A = {}
 
+    global BLACKLIST
+    BLACKLIST += ['A003775']
     formula_count = 0
     for x, row in enumerate(cursor.execute("select id, parsed_formulas from sequence where parsed_formulas is not NULL order by id;")):
         sequence_id = row[0]
@@ -457,7 +459,7 @@ def process_xrefs():
         if id_a not in BLACKLIST:
             for j in range(i + 1, lsk):
                 id_b = sk[j]
-                sys.stderr.write("%s            \r" % id_b)
+                sys.stderr.write("%s, %d of %d           \r" % (id_b,j-i,lsk-i))
                 sys.stderr.flush()
                 if id_b not in A[id_a] and id_b not in BLACKLIST:
                     l_fexp_b = D[id_b]
