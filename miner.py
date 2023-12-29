@@ -430,7 +430,8 @@ def process_xrefs():
     except:
         A = {}
 
-    for row in cursor.execute("select id, parsed_formulas from sequence where parsed_formulas is not NULL order by id;"): 
+    formula_count = 0
+    for x, row in enumerate(cursor.execute("select id, parsed_formulas from sequence where parsed_formulas is not NULL order by id;")):
         sequence_id = row[0]
 
         if row[1] is not None:
@@ -440,20 +441,24 @@ def process_xrefs():
       
             for formula in parsed_formulas:
                 if len(formula) > 1:
-                    print(sequence_id, formula, len(formula))
+                    print(x+1, sequence_id, formula, len(formula))
                     fexp = string_to_expression(formula)           
                     if fexp not in D[sequence_id]:
                         D[sequence_id].append(fexp)
-       
+                        formula_count += 1
 
     sk = sorted(D.keys())
-    for i in range(0,len(sk)):
+    lsk = len(sk)
+    print("Total sequences to process: %d, formulas: %d, total work to do (n(n-1)/2): %d" % (lsk, formula_count, lsk*(lsk-1) // 2))
+    for i in range(0,lsk):
         id_a = sk[i]
         l_fexp_a = D[id_a]
         if id_a not in A: A[id_a] = []
         if id_a not in BLACKLIST:
-            for j in range(i + 1, len(sk)):
+            for j in range(i + 1, lsk):
                 id_b = sk[j]
+                sys.stderr.write("%s            \r" % id_b)
+                sys.stderr.flush()
                 if id_b not in A[id_a] and id_b not in BLACKLIST:
                     l_fexp_b = D[id_b]
                     for fexp_a in l_fexp_a:
