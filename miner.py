@@ -252,7 +252,8 @@ def create_database(length):
         conn = sqlite3.connect(OEIS_DB_PATH)
         cur = conn.cursor()
         cur.execute("CREATE TABLE sequence(id, name TEXT, data TEXT, formula TEXT, closed_form TEXT, "
-                    "simplified_closed_form TEXT, new INT, regex_match INT, parsed_formulas TEXT, keyword TEXT, xref TEXT, algo TEXT)")
+                    "simplified_closed_form TEXT, new INT, regex_match INT, parsed_formulas TEXT, keyword TEXT, xref TEXT, algo TEXT);")
+        cur.execute("CREATE TABLE matches(id_a TEXT, id_b TEXT, formula_a TEXT, formula_b, TEXT);")
         for n in range(1, length + 1):
             cur.execute("INSERT INTO sequence (id) VALUES ('A%06d');" % n)
         conn.commit()
@@ -444,19 +445,24 @@ def process_xrefs():
        
 
     sk = sorted(D.keys())
-    for a in sk:
-        for b in sk:
-            if a != b:
-                l_fexp_a = D[a]
-                l_fexp_b = D[b]
+    for i in range(0,len(sk)):
+        id_a = sk[i]
+        l_fexp_a = D[id_a]
+        for j in range(i + 1, len(sk)):
+            id_b = sk[j]
+            if id_a != id_b:
+                print(id_a,id_b)
+                l_fexp_b = D[id_b]
                 for fexp_a in l_fexp_a:
                     for fexp_b in l_fexp_b:
                         if fexp_a == fexp_b:
                             print("="*80)
                             print("new xref:")
-                            print("seq a:", a, fexp_a, "seq b:", b, fexp_b)
+                            print("seq a:", id_a, fexp_a, "seq b:", id_b, fexp_b)
                             print("-"*80)
-
+                            sql = "insert into matches values (?,?,?,?);"
+                            cur.execute(sql,(id_a,id_b, str(fexp_a), str(fexp_b)))
+                          
 
 if __name__ == "__main__":
     create_database(368_000)
