@@ -10,10 +10,12 @@ import lzo
 import gzip
 from functools import cache
 from sage.all import CFiniteSequences, QQ, sage_eval, var
+from lib.pickling import *
 
 ALGORITHMS = ['sage', 'pari']
 OEIS_DATA_DIR = 'oeis_data'
 OEIS_DB_PATH = os.path.join(OEIS_DATA_DIR, 'oeis.db')
+XREF_PKL_FILE = os.path.join(OEIS_DATA_DIR, 'xref.pkl')
 SEQUENCE_MODE = "lzo"
 #SEQUENCE_MODE = "lzogzip"
 
@@ -408,6 +410,7 @@ def process_sequences():
         if n % 10 == 0:
             conn.commit()
 
+
 def process_xrefs():
     """
     Tries to find new xrefs comparing equivalences in parsed formula expressions.
@@ -422,6 +425,10 @@ def process_xrefs():
     not_easy_count = 0
   
     D={}
+    try:
+        A = decompress_pickle(XREF_PKL_FILE)
+    except:
+        A = {}
 
     for row in cursor.execute("select id, parsed_formulas from sequence where parsed_formulas is not NULL order by id;"): 
         sequence_id = row[0]
@@ -448,21 +455,24 @@ def process_xrefs():
     for i in range(0,len(sk)):
         id_a = sk[i]
         l_fexp_a = D[id_a]
-        print(id_a)
+        if id_a not in A: A[id_a] = []
         for j in range(i + 1, len(sk)):
             id_b = sk[j]
             if id_a != id_b:
-                l_fexp_b = D[id_b]
-                for fexp_a in l_fexp_a:
-                    for fexp_b in l_fexp_b:
-                        if fexp_a == fexp_b:
-                            print("="*80)
-                            print("new xref:")
-                            print("seq a:", id_a, fexp_a, "seq b:", id_b, fexp_b)
-                            print("-"*80)
-                            sql = "insert into matches values (?,?,?,?);"
-                            cur.execute(sql,(id_a,id_b, str(fexp_a), str(fexp_b)))
-                          
+                if id_b not in A[id_a]:
+                    l_fexp_b = D[id_b]
+                    for fexp_a in l_fexp_a:
+                        for fexp_b in l_fexp_b:
+                            if fexp_a == fexp_b:
+                                print("="*80)
+                                print("new xref:")
+                                print("seq a:", id_a, fexp_a, "seq b:", id_b, fexp_b)
+                                print("-"*80)
+                                sql = "insert into matches values (?,?,?,?);"
+                                cur.execute(sql,(id_a,id_b, str(fexp_a), str(fexp_b)))
+                    A[id_a].append(id_b)      
+        compress_pickle(XREF_PKL_FILE, A)
+        print(id_a, "processed xrefs:", len(A[id_a]))
 
 if __name__ == "__main__":
     create_database(368_000)
