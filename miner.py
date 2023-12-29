@@ -448,10 +448,10 @@ def process_xrefs():
     for i in range(0,len(sk)):
         id_a = sk[i]
         l_fexp_a = D[id_a]
+        print(id_a)
         for j in range(i + 1, len(sk)):
             id_b = sk[j]
             if id_a != id_b:
-                print(id_a,id_b)
                 l_fexp_b = D[id_b]
                 for fexp_a in l_fexp_a:
                     for fexp_b in l_fexp_b:
