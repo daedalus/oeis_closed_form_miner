@@ -246,21 +246,22 @@ def create_database(length):
     Args:
         length (int): The number of sequences to prepopulate the database with.
     """
-    if not os.path.isfile(OEIS_DB_PATH):
-        conn = sqlite3.connect(OEIS_DB_PATH)
-        cur = conn.cursor()
-        cur.execute("CREATE TABLE sequence(id, name TEXT, data TEXT, formula TEXT, closed_form TEXT, "
-                    "simplified_closed_form TEXT, new INT, regex_match INT, parsed_formulas TEXT, keyword TEXT, xref TEXT, algo TEXT);")
-        cur.execute("CREATE TABLE matches(id_a TEXT, id_b TEXT, formula_a TEXT, formula_b, TEXT);")
-        cur.execute("CREATE TABLE blacklist(sequence_id TEXT);")
+    if os.path.isfile(OEIS_DB_PATH):
+        return
+    conn = sqlite3.connect(OEIS_DB_PATH)
+    cur = conn.cursor()
+    cur.execute("CREATE TABLE sequence(id, name TEXT, data TEXT, formula TEXT, closed_form TEXT, "
+                "simplified_closed_form TEXT, new INT, regex_match INT, parsed_formulas TEXT, keyword TEXT, xref TEXT, algo TEXT);")
+    cur.execute("CREATE TABLE matches(id_a TEXT, id_b TEXT, formula_a TEXT, formula_b, TEXT);")
+    cur.execute("CREATE TABLE blacklist(sequence_id TEXT);")
 
-        for n in range(1, length + 1):
-            cur.execute("INSERT INTO sequence (id) VALUES ('A%06d');" % n)
+    for n in range(1, length + 1):
+        cur.execute("INSERT INTO sequence (id) VALUES ('A%06d');" % n)
 
-        for sequence_id in BLACKLIST:
-            cur.execute("INSERT INTO blacklist (sequence_id) VALUES(?);", (sequence_id,))
+    for sequence_id in BLACKLIST:
+        cur.execute("INSERT INTO blacklist (sequence_id) VALUES(?);", (sequence_id,))
 
-        conn.commit()
+    conn.commit()
 
 
 def add_to_blacklist(sequence_ids):
