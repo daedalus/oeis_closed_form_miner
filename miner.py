@@ -8,6 +8,7 @@ import requests
 import sqlite3
 import lzo
 import gzip
+import argparse
 from functools import cache
 from sage.all import CFiniteSequences, QQ, sage_eval, var
 from lib.pickling import *
@@ -501,17 +502,29 @@ def process_xrefs():
         print(id_a, "processed xrefs:", len(A[id_a]))
 
 
-if __name__ == "__main__":
+def main():
+    parser = argparse.ArgumentParser(description='Process sequences and perform various tasks.')
+
+    parser.add_argument('-d', '--download', nargs=2, metavar=('start', 'end'), type=int,
+                        help='Download only remaining sequences in the specified range.')
+    parser.add_argument('-x', '--process-xrefs', action='store_true', help='Process cross-references.')
+    parser.add_argument('-b', '--add-to-blacklist', metavar='sequence', help='Add a sequence to the blacklist.')
+
+    args = parser.parse_args()
+
     create_database(368_000)
-    if len(sys.argv) > 1 and sys.argv[1] == "-d":
-        download_only_remaining(int(sys.argv[2]),int(sys.argv[3]))
-    elif len(sys.argv) > 1 and sys.argv[1] == "-x":
+
+    if args.download:
+        download_only_remaining(args.download[0], args.download[1])
+    elif args.process_xrefs:
         process_xrefs()
-    elif len(sys.argv) > 1 and sys.argv[1] == "-b":
-        add_to_blacklist(sys.argv[2])
-    elif (len(sys.argv)) > 1 and sys.argv[1] == "-h":
-        print("FIXME: here goes the help")
+    elif args.add_to_blacklist:
+        add_to_blacklist(args.add_to_blacklist)
     else:
         print('Begin processing sequences...')
         process_sequences()
         print('End.')
+
+if __name__ == "__main__":
+    main()
+
