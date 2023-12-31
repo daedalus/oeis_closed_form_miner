@@ -25,10 +25,11 @@ OEIS_FORMULA_REGEX_3 = '^a\(n\)\s\=\s(.*)\.|(\s\-\s\_(.*)\_\,(.*))$'
 OEIS_FORMULA_REGEX_4 = '^a\(n\)\s\=\s(.*)\.$|a\(n\)\s\=\s(.*)\.(\s\-\s\_(.*)\_\,(.*))$'
 OEIS_XREF_REGEX = 'A[0-9]{6}'
 
-BLACKLIST = ['A004921', 'A131921','A014910', 'A022898', 'A022901'] # Hard sequences for the moment we want to ignore them
+BLACKLIST = ['A004921', 'A131921','A014910', 'A022898', 'A022901','A069026','A080300','A084681','A090446','A094659','A094675'] # hard sequences for the moment we want to ignore them.
+
 
 #@cache
-def regex_match(regex, expression):
+def regex_match_one(regex, expression):
     """
     Matches an expression (formula in the OEIS format) to a regex.
 
@@ -40,12 +41,8 @@ def regex_match(regex, expression):
         str or None: A string representation of a formula.
     """
     try:
-        match_groups = re.match(regex, expression).groups()
-        if match_groups and len(match_groups) > 0:
-            if match_groups[0] is None:
-                return match_groups[1]
-            else:
-                return match_groups[0]
+        if (match_groups := re.match(regex, expression).groups()):
+            return match_groups[1] if match_groups[0] is None else match_groups[0]
     except Exception:
         return None
 
@@ -75,28 +72,28 @@ def simplify_expression(cf):
         str or None: Simplified expression.
     """
     try:
-        return str(cf.full_simplify().operands()[0])
+        return str(cf.full_simplify())
     except Exception:
-        return None
+        return
 
 @cache
 def formula_match_regex(RE, formulas):
-  """
+    """
   Matches a formula to a regex then validates it as an expression.
   Args:
     List of formulas in str format.
   Returns:
     List of valid expressions.
   """
-  matched = []
-  for formula in formulas:
-      if (r_formula := regex_match(RE, formula)) is not None:
-          try:
-              matched.append(string_to_expression(r_formula))
-          except Exception:
-              pass
-  if len(matched) > 0:
-      return matched
+    matched = []
+    for formula in formulas:
+        if (r_formula := regex_match_one(RE, formula)) is not None:
+            try:
+                matched.append(string_to_expression(r_formula))
+            except Exception:
+                pass
+    if matched:
+        return matched
 
 
 def formula_match_exp(formula_exps, closed_form_exp):
@@ -112,7 +109,7 @@ def formula_match_exp(formula_exps, closed_form_exp):
     """
     for f_exp in formula_exps:
         try:
-            if bool(f_exp == closed_form_exp):
+            if f_exp == closed_form_exp:
                 return True
         except Exception:
             pass
@@ -171,8 +168,6 @@ def load_cached_sequence(sequence_id):
             else:
                 return json.loads(fp.read())
 
-    return None
-
 
 def save_cached_sequence(sequence_id, data):
     """
@@ -201,6 +196,7 @@ def save_cached_sequence(sequence_id, data):
         else:
             fp.write(raw_data.encode("utf8"))
             return len(raw_data),0
+
 
 def guess_sequence(lst):
     """
@@ -256,9 +252,23 @@ def create_database(length):
         cur.execute("CREATE TABLE sequence(id, name TEXT, data TEXT, formula TEXT, closed_form TEXT, "
                     "simplified_closed_form TEXT, new INT, regex_match INT, parsed_formulas TEXT, keyword TEXT, xref TEXT, algo TEXT);")
         cur.execute("CREATE TABLE matches(id_a TEXT, id_b TEXT, formula_a TEXT, formula_b, TEXT);")
+        cur.execute("CREATE TABLE blacklist(sequence_id TEXT);")
+
         for n in range(1, length + 1):
             cur.execute("INSERT INTO sequence (id) VALUES ('A%06d');" % n)
+
+        for sequence_id in BLACKLIST:
+            cur.execute("INSERT INTO blacklist (sequence_id) VALUES(?);", (sequence_id,))
+
         conn.commit()
+
+
+def add_to_blacklist(sequence_ids):
+    conn = sqlite3.connect(OEIS_DB_PATH)
+    cursor = conn.cursor()
+    for sequence_id in re.match.find_all(OEIS_XREF_REGEX, sequence_ids):
+        cursor.execute("INSERT INTO blacklist (sequence_id) VALUES (?);", (sequence_id,))
+    conn.commit()
 
 
 def yield_unprocessed_ids(cursor):
@@ -272,6 +282,12 @@ def yield_unprocessed_ids(cursor):
         str: The next unvisited sequence ID.
     """
     cursor.execute("SELECT id FROM sequence WHERE name IS NULL;")
+    for row in cursor.fetchall():
+        yield row[0]
+
+
+def yield_blacklist(cursor):
+    cursor.execute("select sequence_id from blacklist order by sequence_id;")
     for row in cursor.fetchall():
         yield row[0]
 
@@ -290,8 +306,9 @@ def download_only_remaining(start,end):
         else:
             fails += 1
         if fails == 10:
-          print("Too many failed...")
-          sys.exit(-1)
+            print("Too many failed...")
+            sys.exit(-1)
+
 
 def process_sequences():
     """
@@ -302,7 +319,7 @@ def process_sequences():
     """
     conn = sqlite3.connect(OEIS_DB_PATH)
     cursor = conn.cursor()
- 
+     
     #conn.set_trace_callback(print)
 
     fail_count = 0
@@ -311,8 +328,10 @@ def process_sequences():
     hard_count = 0
     not_easy_count = 0
 
+    seq_BLACKLIST = sorted(set(BLACKLIST + list(yield_blacklist(cursor))))
+
     for n, sequence_id in enumerate(yield_unprocessed_ids(cursor)):
-        if sequence_id in BLACKLIST:
+        if sequence_id in seq_BLACKLIST:
             continue
         sys.stderr.write("processing %s...           \r" % sequence_id)
         sys.stderr.flush()
@@ -331,12 +350,12 @@ def process_sequences():
             keyword = raw_data['results'][0]['keyword']
             xref = None
             if 'xref' in raw_data['results'][0]:
-              xref = str(re.findall(OEIS_XREF_REGEX, str(raw_data['results'][0]['xref'])))
+                xref = str(re.findall(OEIS_XREF_REGEX, str(raw_data['results'][0]['xref'])))
             l_formula, formula = [], ''
             if 'formula' in raw_data['results'][0]:
                 l_formula = raw_data['results'][0]['formula']
                 formula = json.dumps(l_formula)
-            if (rname := regex_match(OEIS_FORMULA_REGEX_2, name)) is not None:
+            if (rname := regex_match_one(OEIS_FORMULA_REGEX_2, name)) is not None:
                 l_formula.append(rname)
 
             closed_form = ""
@@ -346,7 +365,7 @@ def process_sequences():
             v_regex_match = False
 
             formula_exps = formula_match_regex(OEIS_FORMULA_REGEX_4, tuple(l_formula))
-           
+               
             if (cf_algo := check_sequence([int(x) for x in data.split(",")])) is not None:
                 cf, algo = cf_algo
                 found_count += 1
@@ -357,16 +376,16 @@ def process_sequences():
 
                     is_new = (closed_form is not None and closed_form not in name and closed_form not in formula)
                     is_new |= (simplified_closed_form is not None and simplified_closed_form not in name and
-                               simplified_closed_form not in formula)
-                    
+                                   simplified_closed_form not in formula)
+                        
                     try:
-                      closed_form_exp = string_to_expression(closed_form)
+                        closed_form_exp = string_to_expression(closed_form)
                     except:
-                      closed_form_exp = None
+                        closed_form_exp = None
 
                     if closed_form_exp is not None and formula_exps is not None:
-                      is_new &= not (v_regex_match := formula_match_exp(formula_exps, closed_form_exp))
-                   
+                        is_new &= not (v_regex_match := formula_match_exp(formula_exps, closed_form_exp))
+                       
                     if is_new:
                         new_count += 1
                         if keyword.find("hard") > -1:
@@ -389,20 +408,20 @@ def process_sequences():
                         print(80 * "-")
                         if found_count > 0 and new_count > 0:
                             print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f, RATIO(P/N): %.3f, HARD: %d, NOT EASY: %d"
-                                  % (proc, found_count, new_count, proc / found_count, found_count / new_count,
-                                     proc / new_count, hard_count, not_easy_count))
+                                    % (proc, found_count, new_count, proc / found_count, found_count / new_count,
+                                         proc / new_count, hard_count, not_easy_count))
                         print(formula_match_regex.cache_info())
 
-           
+               
             formula_exps_str = None
             if formula_exps is not None:
-              formula_exps_str = json.dumps([str(f) for f in formula_exps]) 
+                formula_exps_str = json.dumps([str(f) for f in formula_exps]) 
 
 
             sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, parsed_formulas=?, keyword=?, xref=?, algo=? WHERE id=?"""
             cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new),
                 int(v_regex_match), formula_exps_str, keyword, xref, algo, sequence_id))
- 
+     
         else:
             fail_count += 1
             if fail_count == 10:
@@ -425,7 +444,7 @@ def process_xrefs():
     found_count = 0
     hard_count = 0
     not_easy_count = 0
-  
+
     D={}
     try:
         A = decompress_pickle(XREF_PKL_FILE)
@@ -436,13 +455,13 @@ def process_xrefs():
     BLACKLIST += ['A003775']
     formula_count = 0
     for x, row in enumerate(cursor.execute("select id, parsed_formulas from sequence where parsed_formulas is not NULL order by id;")):
-        sequence_id = row[0]
-
         if row[1] is not None:
             parsed_formulas = json.loads(row[1])
 
+            sequence_id = row[0]
+
             D[sequence_id] = []
-      
+
             for formula in parsed_formulas:
                 if len(formula) > 1:
                     print(x+1, sequence_id, formula, len(formula))
@@ -478,11 +497,17 @@ def process_xrefs():
         compress_pickle(XREF_PKL_FILE, A)
         print(id_a, "processed xrefs:", len(A[id_a]))
 
+
 if __name__ == "__main__":
     create_database(368_000)
     if len(sys.argv) > 1 and sys.argv[1] == "-d":
         download_only_remaining(int(sys.argv[2]),int(sys.argv[3]))
     elif len(sys.argv) > 1 and sys.argv[1] == "-x":
         process_xrefs()
+    elif len(sys.argv) > 1 and sys.argv[1] == "-b":
+        add_to_blacklist(sys.argv[2])
+    elif (len(sys.argv)) > 1 and sys.argv[1] == "-h":
+        print("FIXME: here goes the help")
     else:
+        print('processing sequences...')
         process_sequences()
