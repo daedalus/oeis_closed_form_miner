@@ -512,5 +512,6 @@ if __name__ == "__main__":
     elif (len(sys.argv)) > 1 and sys.argv[1] == "-h":
         print("FIXME: here goes the help")
     else:
-        print('processing sequences...')
+        print('Begin processing sequences...')
         process_sequences()
+        print('End.')
