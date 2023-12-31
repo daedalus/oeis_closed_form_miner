@@ -350,7 +350,8 @@ def process_sequences():
             fail_count = 0
             proc = n + 1
             name = raw_data['results'][0]['name']
-            data = raw_data['results'][0]['data']
+            sdata = raw_data['results'][0]['data']
+            data = [int(x) for x in sdata.split(",")]
             keyword = raw_data['results'][0]['keyword']
             xref = None
             if 'xref' in raw_data['results'][0]:
@@ -370,7 +371,7 @@ def process_sequences():
 
             formula_exps = formula_match_regex(OEIS_FORMULA_REGEX_4, tuple(l_formula))
                
-            if (cf_algo := check_sequence([int(x) for x in data.split(",")])) is not None:
+            if (cf_algo := check_sequence(data)) is not None:
                 cf, algo = cf_algo
                 found_count += 1
                 closed_form = str(cf)
@@ -406,6 +407,7 @@ def process_sequences():
                                   len(simplified_closed_form))
                         else:
                             print(sequence_id, "maxima could not simplify", closed_form)
+                        print("len(data):",len(data))
                         print("keywords:", keyword)
                         print("xref:",xref)
                         print("algo:", algo)
@@ -423,7 +425,7 @@ def process_sequences():
 
 
             sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, parsed_formulas=?, keyword=?, xref=?, algo=? WHERE id=?"""
-            cursor.execute(sql, (name, data, formula, closed_form, simplified_closed_form, int(is_new),
+            cursor.execute(sql, (name, sdata, formula, closed_form, simplified_closed_form, int(is_new),
                 int(v_regex_match), formula_exps_str, keyword, xref, algo, sequence_id))
      
         else:
