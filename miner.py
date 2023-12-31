@@ -247,7 +247,9 @@ def create_database(length):
         length (int): The number of sequences to prepopulate the database with.
     """
     if os.path.isfile(OEIS_DB_PATH):
+        print(f'Using database {OEIS_DB_PATH}...')
         return
+
     conn = sqlite3.connect(OEIS_DB_PATH)
     cur = conn.cursor()
     cur.execute("CREATE TABLE sequence(id, name TEXT, data TEXT, formula TEXT, closed_form TEXT, "
