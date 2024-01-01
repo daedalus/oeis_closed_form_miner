@@ -3,6 +3,7 @@
 import re
 import os
 import sys
+import time
 import json
 import requests
 import sqlite3
@@ -26,7 +27,7 @@ OEIS_FORMULA_REGEX_3 = '^a\(n\)\s\=\s(.*)\.|(\s\-\s\_(.*)\_\,(.*))$'
 OEIS_FORMULA_REGEX_4 = '^a\(n\)\s\=\s(.*)\.$|a\(n\)\s\=\s(.*)\.(\s\-\s\_(.*)\_\,(.*))$'
 OEIS_XREF_REGEX = 'A[0-9]{6}'
 
-BLACKLIST = ['A004921', 'A131921','A014910', 'A022898', 'A022901','A069026','A080300','A084681','A090446','A094659','A094675'] # hard sequences for the moment we want to ignore them.
+BLACKLIST = ['A004921', 'A008437', 'A014910', 'A022898', 'A022901', 'A069026', 'A080300', 'A084681', 'A090446', 'A094659', 'A094675', 'A131921', 'A136558','A156390','A156404'] # hard sequences for the moment we want to ignore them.
 
 
 #@cache
@@ -80,12 +81,12 @@ def simplify_expression(cf):
 @cache
 def formula_match_regex(RE, formulas):
     """
-  Matches a formula to a regex then validates it as an expression.
-  Args:
-    List of formulas in str format.
-  Returns:
-    List of valid expressions.
-  """
+    Matches a formula to a regex then validates it as an expression.
+    Args:
+        List of formulas in str format.
+    Returns:
+        List of valid expressions.
+    """
     matched = []
     for formula in formulas:
         if (r_formula := regex_match_one(RE, formula)) is not None:
@@ -212,8 +213,10 @@ def guess_sequence(lst):
     C = CFiniteSequences(QQ)
     for algo in ALGORITHMS:
         if (s := C.guess(lst, algorithm=algo)) != 0:
-            return s.closed_form(), algo
-
+            try:
+                return s.closed_form(), algo
+            except Exception:
+                return 
 
 def check_sequence(data, items=10):
     """
@@ -268,6 +271,11 @@ def create_database(length):
 
 
 def add_to_blacklist(sequence_ids):
+    """
+    Ads multiple sequence ids to the blacklist table.
+    Args:
+       string of ids.
+    """
     conn = sqlite3.connect(OEIS_DB_PATH)
     cursor = conn.cursor()
     for sequence_id in re.match.find_all(OEIS_XREF_REGEX, sequence_ids):
@@ -291,12 +299,25 @@ def yield_unprocessed_ids(cursor):
 
 
 def yield_blacklist(cursor):
+    """
+    Yields from the database a list of sequence ids in the blacklist.
+    Args:
+        cursor
+    Yields:
+        str: sequence id.   
+    """
     cursor.execute("select sequence_id from blacklist order by sequence_id;")
     for row in cursor.fetchall():
         yield row[0]
 
 
 def download_only_remaining(start,end):
+    """
+    Downloads sequences from the API in the range start,end.
+    Args:
+        start
+        end
+    """
     conn = sqlite3.connect(OEIS_DB_PATH)
     cursor = conn.cursor()
     fails = 0
@@ -333,10 +354,12 @@ def process_sequences():
     not_easy_count = 0
 
     seq_BLACKLIST = sorted(set(BLACKLIST + list(yield_blacklist(cursor))))
+    tc = 0
 
     for n, sequence_id in enumerate(yield_unprocessed_ids(cursor)):
         if sequence_id in seq_BLACKLIST:
             continue
+        t0 = time.time()
         sys.stderr.write("processing %s...           \r" % sequence_id)
         sys.stderr.flush()
         cached_data = load_cached_sequence(sequence_id)
@@ -412,10 +435,12 @@ def process_sequences():
                         print("xref:",xref)
                         print("algo:", algo)
                         print(80 * "-")
+                        td = time.time() - t0
+                        tc += td
                         if found_count > 0 and new_count > 0:
-                            print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f, RATIO(P/N): %.3f, HARD: %d, NOT EASY: %d"
+                            print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f, RATIO(P/N): %.3f, HARD: %d, NOT EASY: %d, td: %.3f, avg: %.3f"
                                     % (proc, found_count, new_count, proc / found_count, found_count / new_count,
-                                         proc / new_count, hard_count, not_easy_count))
+                                         proc / new_count, hard_count, not_easy_count, td, tc/proc))
                         print(formula_match_regex.cache_info())
 
                
