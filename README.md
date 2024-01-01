@@ -45,7 +45,7 @@ This Python script is designed to interact with the On-Line Encyclopedia of Inte
     1. `echo "select id, algo, closed_form from sequence where keyword like '%hard%' and new=1" | sqlite3 oeis_data/oeis.db`
     2. `echo "select id, algo, closed_form from sequence where keyword not like '%easy%' and new=1" | sqlite3 oeis_data/oeis.db`
 7. Find new xrefs functionality: `python miner.py -x` will try to match symbolicaly every parsed formula in every sequence in the database.
-8. There are some sequences that guessing its closed form hangs process, for those sequences there is a blacklist in place that can be called with: `python miner.py -b sequence` to avoid processing them.
+8. There are some sequences that guessing its closed form hangs the process, for those sequences there is a blacklist in place that can be called with: `python miner.py -b sequence` to avoid processing them.
 
 ## Dependencies
 
