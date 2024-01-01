@@ -57,10 +57,12 @@ def string_to_expression(s):
         s (str): Input string.
 
     Returns:
-        Expression: A SageMath expression.
+        Expression: A SageMath expression or None.
     """
-    return sage_eval(s, locals={'n': var('x'),'x':var('x')})
-
+    try:
+        return sage_eval(s, locals={'n': var('x'),'x':var('x')})
+    Exception:
+        return
 
 def simplify_expression(cf):
     """
@@ -363,7 +365,7 @@ def process_sequences(ignore_blacklist=False):
         if sequence_id in seq_BLACKLIST:
             continue
         t0 = time.time()
-        sys.stderr.write("processing %s...           \r" % sequence_id)
+        sys.stderr.write("Processing: %s...           \r" % sequence_id)
         sys.stderr.flush()
         cached_data = load_cached_sequence(sequence_id)
         if cached_data is not None:
@@ -400,7 +402,6 @@ def process_sequences(ignore_blacklist=False):
             else:
                 formula_exps = []
 
-
             if (cf_algo := check_sequence(data)) is not None:
                 cf, algo = cf_algo
                 found_count += 1
@@ -413,10 +414,7 @@ def process_sequences(ignore_blacklist=False):
                     is_new |= (simplified_closed_form is not None and simplified_closed_form not in name and
                                    simplified_closed_form not in formula)
                         
-                    try:
-                        closed_form_exp = string_to_expression(closed_form)
-                    except:
-                        closed_form_exp = None
+                    closed_form_exp = string_to_expression(closed_form)
 
                     if closed_form_exp is not None and formula_exps is not None:
                         is_new &= not (v_regex_match := formula_match_exp(formula_exps, closed_form_exp))
