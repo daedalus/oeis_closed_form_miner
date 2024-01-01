@@ -27,10 +27,10 @@ OEIS_FORMULA_REGEX_3 = '^a\(n\)\s\=\s(.*)\.|(\s\-\s\_(.*)\_\,(.*))$'
 OEIS_FORMULA_REGEX_4 = '^a\(n\)\s\=\s(.*)\.$|a\(n\)\s\=\s(.*)\.(\s\-\s\_(.*)\_\,(.*))$'
 OEIS_XREF_REGEX = 'A[0-9]{6}'
 
-BLACKLIST = ['A004921', 'A008437', 'A014910', 'A022898', 'A022901', 'A069026', 'A080300', 'A084681', 'A090446', 'A094659', 'A094675', 'A131921', 'A136558','A156390','A156404','A157779'] # hard sequences for the moment we want to ignore them.
+BLACKLIST = ['A004921', 'A008437', 'A014910', 'A022898', 'A022901', 'A069026', 'A080300', 'A084681', 'A090446', 'A094659', 'A094675', 'A131921', 'A136558','A156390','A156404','A157779','A158801','A167294','A167300','A167301','A167339','A167345','A167350','A167354','A167356','A176028','A179270','A182158','A183587','A183691','A183703','A183712','A184146','A184627','A184653','A186219','A186315','A190301','A194666','A225339','A225480'] 
+# hard sequences for the moment we want to ignore them.
 
 
-#@cache
 def regex_match_one(regex, expression):
     """
     Matches an expression (formula in the OEIS format) to a regex.
@@ -49,7 +49,6 @@ def regex_match_one(regex, expression):
         return None
 
 
-#@cache
 def string_to_expression(s):
     """
     Evaluate a string to a SageMath expression.
@@ -78,7 +77,7 @@ def simplify_expression(cf):
     except Exception:
         return
 
-@cache
+
 def formula_match_regex(RE, formulas):
     """
     Matches a formula to a regex then validates it as an expression.
@@ -200,6 +199,7 @@ def save_cached_sequence(sequence_id, data):
             return len(raw_data),0
 
 
+@cache
 def guess_sequence(lst):
     """
     Guesses the closed form of an integer sequence.
@@ -212,11 +212,12 @@ def guess_sequence(lst):
     """
     C = CFiniteSequences(QQ)
     for algo in ALGORITHMS:
-        if (s := C.guess(lst, algorithm=algo)) != 0:
+        if (s := C.guess(list(lst), algorithm=algo)) != 0:
             try:
                 return s.closed_form(), algo
             except Exception:
                 return 
+
 
 def check_sequence(data, items=10):
     """
@@ -230,8 +231,8 @@ def check_sequence(data, items=10):
         object or None: The guessed closed form or None if no closed form is found.
     """
     first_terms_data = data[:items]
-    if len(first_terms_data) > 7 and (result := guess_sequence(first_terms_data)) is not None:
-        return guess_sequence(data)
+    if len(first_terms_data) > 7 and (result := guess_sequence(tuple(first_terms_data))) is not None:
+        return guess_sequence(tuple(data))
 
 
 def process_file():
@@ -394,8 +395,12 @@ def process_sequences(ignore_blacklist=False):
             is_new = False
             v_regex_match = False
 
-            formula_exps = formula_match_regex(OEIS_FORMULA_REGEX_4, tuple(l_formula))
-               
+            if l_formula:
+                formula_exps = formula_match_regex(OEIS_FORMULA_REGEX_4, l_formula)
+            else:
+                formula_exps = []
+
+
             if (cf_algo := check_sequence(data)) is not None:
                 cf, algo = cf_algo
                 found_count += 1
@@ -446,8 +451,8 @@ def process_sequences(ignore_blacklist=False):
                             print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f, RATIO(P/N): %.3f, HARD: %d, NOT EASY: %d, td: %.3f, avg: %.3f, max: %.3f"
                                     % (proc, found_count, new_count, proc / found_count, found_count / new_count,
                                          proc / new_count, hard_count, not_easy_count, td, tc/proc, m))
-                        print(formula_match_regex.cache_info())
-
+                        #print(formula_match_regex.cache_info())
+                        print(guess_sequence.cache_info())
                
             formula_exps_str = None
             if formula_exps is not None:
