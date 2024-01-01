@@ -27,7 +27,7 @@ OEIS_FORMULA_REGEX_3 = '^a\(n\)\s\=\s(.*)\.|(\s\-\s\_(.*)\_\,(.*))$'
 OEIS_FORMULA_REGEX_4 = '^a\(n\)\s\=\s(.*)\.$|a\(n\)\s\=\s(.*)\.(\s\-\s\_(.*)\_\,(.*))$'
 OEIS_XREF_REGEX = 'A[0-9]{6}'
 
-BLACKLIST = ['A004921', 'A008437', 'A014910', 'A022898', 'A022901', 'A069026', 'A080300', 'A084681', 'A090446', 'A094659', 'A094675', 'A131921', 'A136558','A156390','A156404'] # hard sequences for the moment we want to ignore them.
+BLACKLIST = ['A004921', 'A008437', 'A014910', 'A022898', 'A022901', 'A069026', 'A080300', 'A084681', 'A090446', 'A094659', 'A094675', 'A131921', 'A136558','A156390','A156404','A157779'] # hard sequences for the moment we want to ignore them.
 
 
 #@cache
@@ -278,7 +278,7 @@ def add_to_blacklist(sequence_ids):
     """
     conn = sqlite3.connect(OEIS_DB_PATH)
     cursor = conn.cursor()
-    for sequence_id in re.match.find_all(OEIS_XREF_REGEX, sequence_ids):
+    for sequence_id in re.findall(OEIS_XREF_REGEX, sequence_ids):
         cursor.execute("INSERT INTO blacklist (sequence_id) VALUES (?);", (sequence_id,))
     conn.commit()
 
@@ -355,6 +355,7 @@ def process_sequences():
 
     seq_BLACKLIST = sorted(set(BLACKLIST + list(yield_blacklist(cursor))))
     tc = 0
+    m = 0
 
     for n, sequence_id in enumerate(yield_unprocessed_ids(cursor)):
         if sequence_id in seq_BLACKLIST:
@@ -413,7 +414,11 @@ def process_sequences():
 
                     if closed_form_exp is not None and formula_exps is not None:
                         is_new &= not (v_regex_match := formula_match_exp(formula_exps, closed_form_exp))
-                       
+                    
+                    td = time.time() - t0
+                    tc += td
+                    m = max(m,td)
+
                     if is_new:
                         new_count += 1
                         if keyword.find("hard") > -1:
@@ -435,12 +440,11 @@ def process_sequences():
                         print("xref:",xref)
                         print("algo:", algo)
                         print(80 * "-")
-                        td = time.time() - t0
-                        tc += td
+
                         if found_count > 0 and new_count > 0:
-                            print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f, RATIO(P/N): %.3f, HARD: %d, NOT EASY: %d, td: %.3f, avg: %.3f"
+                            print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f, RATIO(P/N): %.3f, HARD: %d, NOT EASY: %d, td: %.3f, avg: %.3f, max: %.3f"
                                     % (proc, found_count, new_count, proc / found_count, found_count / new_count,
-                                         proc / new_count, hard_count, not_easy_count, td, tc/proc))
+                                         proc / new_count, hard_count, not_easy_count, td, tc/proc, m))
                         print(formula_match_regex.cache_info())
 
                
