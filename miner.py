@@ -335,7 +335,7 @@ def download_only_remaining(start,end):
             sys.exit(-1)
 
 
-def process_sequences():
+def process_sequences(ignore_blacklist=False):
     """
     Processes sequences from the generator:
     - Fetches each unvisited sequence from the server or local cache.
@@ -345,18 +345,19 @@ def process_sequences():
     conn = sqlite3.connect(OEIS_DB_PATH)
     cursor = conn.cursor()
      
-    #conn.set_trace_callback(print)
-
     fail_count = 0
     new_count = 0
     found_count = 0
     hard_count = 0
     not_easy_count = 0
-
-    seq_BLACKLIST = sorted(set(BLACKLIST + list(yield_blacklist(cursor))))
     tc = 0
     m = 0
 
+    if ignore_blacklist:
+        seq_BACKLIST = []
+    else:
+        seq_BLACKLIST = sorted(set(BLACKLIST + list(yield_blacklist(cursor))))
+    
     for n, sequence_id in enumerate(yield_unprocessed_ids(cursor)):
         if sequence_id in seq_BLACKLIST:
             continue
@@ -540,7 +541,8 @@ def main():
                         help='Download only remaining sequences in the specified range.')
     parser.add_argument('-x', '--process-xrefs', action='store_true', help='Process cross-references.')
     parser.add_argument('-b', '--add-to-blacklist', metavar='sequence', help='Add a sequence to the blacklist.')
-
+    parser.add_argument('-i', '--ignore-blacklist', action='store_true', help='Ignore the blacklist.')
+    
     args = parser.parse_args()
 
     create_database(368_000)
@@ -551,6 +553,10 @@ def main():
         process_xrefs()
     elif args.add_to_blacklist:
         add_to_blacklist(args.add_to_blacklist)
+    elif args.ignore_blacklist:
+        print('Begin processing sequences (ignoring blacklist)...')
+        process_sequences(True)
+        print('End.')
     else:
         print('Begin processing sequences...')
         process_sequences()
