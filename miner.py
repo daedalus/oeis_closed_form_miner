@@ -461,7 +461,7 @@ def process_sequences(ignore_blacklist=False):
                         is_new &= not (v_regex_match := formula_match_exp(formula_exps, closed_form_exp))
                                     
                     if check_cf:
-                        v_check_cf = expression_verify_sequence(string_to_expression(closed_form), data)
+                        v_check_cf = int(expression_verify_sequence(string_to_expression(closed_form), data))
 
                     td = time.time() - t0
                     tc += td
@@ -497,16 +497,19 @@ def process_sequences(ignore_blacklist=False):
                                          proc / new_count, hard_count, not_easy_count, td, tc/proc, m))
                         #print(formula_match_regex.cache_info())
                         print(guess_sequence.cache_info())
-               
+                else: 
+                  closed_form = None
+                  simplified_closed_form = None
+
             formula_exps_str = None
             if formula_exps is not None:
                 formula_exps_str = json.dumps([str(f) for f in formula_exps]) 
 
             if simplified_closed_form == closed_form: simplified_closed_form = None
-
+            
             sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, parsed_formulas=?, keyword=?, xref=?, algo=?, check_cf=? WHERE id=?"""
             cursor.execute(sql, (name, sdata, formula, closed_form, simplified_closed_form, int(is_new),
-                int(v_regex_match), formula_exps_str, keyword, xref, algo, int(v_check_cf), sequence_id))
+                int(v_regex_match), formula_exps_str, keyword, xref, algo, v_check_cf, sequence_id))
      
         else:
             fail_count += 1
@@ -532,11 +535,7 @@ def verify_sequences(ignore_blacklist=False):
 
 
     fail_count = 0
-    new_count = 0
-    found_count = 0
-    hard_count = 0
-    not_easy_count = 0
-
+    check_count = 0
 
     if ignore_blacklist:
         e_BLACKLIST = []
@@ -544,20 +543,28 @@ def verify_sequences(ignore_blacklist=False):
         e_BLACKLIST = BLACKLIST3
         
     for x, row in enumerate(yield_unchecked_closed_form(cursor1)):
+        proc = x + 1
         sequence_id = row[0]
         if sequence_id in e_BLACKLIST: continue
         data=[int(x) for x in row[1].split(",")]
         closed_form = row[2]
         new = row[3]
-        sys.stderr.write(f"Processing: {sequence_id}...\r")
-        sys.stderr.flush()
+        #sys.stderr.write(f"Processing: {sequence_id}...\r")
+        #sys.stderr.flush()
         if len(closed_form) > 1: 
             exp = string_to_expression(closed_form)
             ok = expression_verify_sequence(exp, data)
             cursor2.execute("update sequence set check_cf=? where id=?;", (int(ok),sequence_id))
             print(f"id: {sequence_id}, cf: {closed_form}, new: {new}, ok: {ok}         ")
+            if ok:
+                check_count += 1
+            else:
+                fail_count += 1
         if x > 0 and x & 10 == 0:
             conn.commit()
+        if check_count > 0 and fail_count > 0:
+            sys.stderr.write("sequence id: %s, PROC: %d RATIO(P/C): %.3f RATIO(P/F): %.3f\r" %(sequence_id, proc,proc / check_count, proc / fail_count) )
+            sys.stderr.flush()
     conn.commit()
 
 

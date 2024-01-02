@@ -6,3 +6,4 @@ requests==2.31.0
 # External libraries
 sage==9.5
 lzo==1.12
+tqdm==4.66.1
