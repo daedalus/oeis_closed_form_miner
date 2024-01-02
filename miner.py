@@ -238,6 +238,12 @@ def check_sequence(data, items=10):
         return guess_sequence(tuple(data))
 
 
+def compare(A,B):
+    for n in range(0,len(A)):
+        if A[n] != B[n]: 
+            return False
+    return True
+
 def expression_verify_sequence(exp, ground_truth_data):
     """
     Evaluates an expression and generates a sequence to check against ground truth data.
@@ -253,17 +259,20 @@ def expression_verify_sequence(exp, ground_truth_data):
         return False
     #e_data = [fexp(n) for n in range(0, lg+1)]
     e_data = []
-    for n in range(0, lg+1):
+    for n in tqdm(range(0, lg+1)):
         fx = fexp(n)
         try:
             e_data.append(int(fx.round()))
         except:
             e_data.append(fx)
-    if e_data[:lg] == ground_truth_data or e_data[1:] == ground_truth_data:
-         #print(e_data, ground_truth_data)
-         return True
-    return False
- 
+    #print(e_data, ground_truth_data)
+    #if e_data[:lg] == ground_truth_data or e_data[1:] == ground_truth_data:
+    #     #print(e_data, ground_truth_data)
+    #     return True
+    #return False
+    if compare(e_data[:lg - 1],ground_truth_data) or compare(e_data[1:], ground_truth_data):
+        return True
+    return False 
 
 def process_file():
     """
@@ -543,7 +552,8 @@ def verify_sequences(ignore_blacklist=False):
         sys.stderr.write(f"Processing: {sequence_id}...\r")
         sys.stderr.flush()
         if len(closed_form) > 1: 
-            ok = expression_verify_sequence(string_to_expression(closed_form), data)
+            exp = string_to_expression(closed_form)
+            ok = expression_verify_sequence(exp, data)
             cursor2.execute("update sequence set check_cf=? where id=?;", (int(ok),sequence_id))
             print(f"id: {sequence_id}, cf: {closed_form}, new: {new}, ok: {ok}         ")
         if x > 0 and x & 10 == 0:
