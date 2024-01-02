@@ -1,8 +1,10 @@
 import bz2
-import cPickle as pickle
 import sys
 import os
-
+try:
+  import cPickle as pickle
+except:
+  import pickle
 
 # Pickle a file and then compress it into a file with extension
 def compress_pickle(filename, data):
