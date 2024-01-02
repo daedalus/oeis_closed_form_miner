@@ -392,7 +392,7 @@ def process_sequences(ignore_blacklist=False):
     not_easy_count = 0
     tc = 0
     m = 0
-    check_cf = False
+    check_cf = True
 
     if ignore_blacklist:
         seq_BLACKLIST = []
