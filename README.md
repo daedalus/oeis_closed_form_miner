@@ -51,8 +51,8 @@ This Python script is designed to interact with the On-Line Encyclopedia of Inte
 
 ## Dependencies
 
-- Python libraries: `sqlite3`
-- External libraries: `lzo` (for compression), `sage.all` (for mathematical analysis), `tqdm`.
+- External packages: `sagemath`, `maxima-sage-share`, `pari-gp`.
+- Python libraries: `sqlite3`, `lzo`, `tqdm`.
 
 ## License
 
