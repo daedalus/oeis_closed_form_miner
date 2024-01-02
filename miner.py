@@ -15,6 +15,7 @@ from functools import cache
 from sage.all import CFiniteSequences, QQ, sage_eval, var
 from sage.all_cmdline import fast_callable
 from lib.pickling import *
+from lib.blacklist import *
 
 ALGORITHMS = ['sage', 'pari']
 OEIS_DATA_DIR = 'oeis_data'
@@ -28,9 +29,6 @@ OEIS_FORMULA_REGEX_2 = '^a\(n\)\s\=\s(.*)\.$'
 OEIS_FORMULA_REGEX_3 = '^a\(n\)\s\=\s(.*)\.|(\s\-\s\_(.*)\_\,(.*))$'
 OEIS_FORMULA_REGEX_4 = '^a\(n\)\s\=\s(.*)\.$|a\(n\)\s\=\s(.*)\.(\s\-\s\_(.*)\_\,(.*))$'
 OEIS_XREF_REGEX = 'A[0-9]{6}'
-
-BLACKLIST = ['A004921', 'A008437', 'A014910', 'A022898', 'A022901', 'A069026', 'A080300', 'A084681', 'A090446', 'A094659', 'A094675', 'A131921', 'A136558','A156390','A156404','A157779','A158801','A167294','A167300','A167301','A167339','A167345','A167350','A167354','A167356','A176028','A179270','A182158','A183587','A183691','A183703','A183712','A184146','A184627','A184653','A186219','A186315','A190301','A194666','A225339','A225480','A260490','A276847','A276913','A279758','A280865','A285480','A285773','A287632','A291168','A316865','A317933','A318497','A322996','A326719','A329195','A336399','A349448','A350898','A352041','A352043','A353464','A355452','A363749','A364403','A366057','A366562'] 
-# hard sequences for the moment we want to ignore them.
 
 
 def regex_match_one(regex, expression):
@@ -241,23 +239,30 @@ def check_sequence(data, items=10):
 
 
 def expression_verify_sequence(exp, ground_truth_data):
-  """
-  Evaluates an expression and generates a sequence to check against ground truth data.
-  Args:
-      Expression, ground_truth_data
-  Returns:
-      Boolean
-  """
-  lg = len(ground_truth_data)
-  try:
-      fexp = fast_callable(exp, vars={'x':var('x')})
-  except:
-      return False
-  e_data = [fexp(n) for n in range(0, lg+1)]
-  #e_data = [fexp(n) for n in tqdm(range(0, lg+1))]
-  if e_data[:lg] == ground_truth_data or e_data[1:] == ground_truth_data:
-      return True
-  return False
+    """
+    Evaluates an expression and generates a sequence to check against ground truth data.
+    Args:
+        Expression, ground_truth_data
+    Returns:
+        Boolean
+    """
+    lg = len(ground_truth_data)
+    try:
+        fexp = fast_callable(exp, vars={'x':var('x')})
+    except:
+        return False
+    #e_data = [fexp(n) for n in range(0, lg+1)]
+    e_data = []
+    for n in range(0, lg+1):
+        fx = fexp(n)
+        try:
+            e_data.append(int(fx.round()))
+        except:
+            e_data.append(fx)
+    if e_data[:lg] == ground_truth_data or e_data[1:] == ground_truth_data:
+         #print(e_data, ground_truth_data)
+         return True
+    return False
  
 
 def process_file():
@@ -506,7 +511,7 @@ def process_sequences(ignore_blacklist=False):
 
 def yield_unchecked_closed_form(cursor):
     #cursor.execute("select id, data , closed_form from sequence where closed_form is not NULL and check_cf is NULL and new=1 order by id;")
-    cursor.execute("select id, data , closed_form from sequence where closed_form is not NULL and check_cf is NULL order by id;")
+    cursor.execute("select id, data , closed_form, new from sequence where closed_form is not NULL and check_cf is NULL order by id;")
     for row in cursor:
       yield row
 
@@ -527,19 +532,20 @@ def verify_sequences(ignore_blacklist=False):
     if ignore_blacklist:
         e_BLACKLIST = []
     else:
-        e_BLACKLIST = BLACKLIST + ['A000073','A000078','A000213','A000253','A000288','A000803','A000930','A000931', 'A001590']
-   
+        e_BLACKLIST = BLACKLIST3
+        
     for x, row in enumerate(yield_unchecked_closed_form(cursor1)):
         sequence_id = row[0]
         if sequence_id in e_BLACKLIST: continue
         data=[int(x) for x in row[1].split(",")]
         closed_form = row[2]
+        new = row[3]
         sys.stderr.write(f"Processing: {sequence_id}...\r")
         sys.stderr.flush()
         if len(closed_form) > 1: 
             ok = expression_verify_sequence(string_to_expression(closed_form), data)
             cursor2.execute("update sequence set check_cf=? where id=?;", (int(ok),sequence_id))
-            print(f"{sequence_id}, {closed_form}, {ok}         ")
+            print(f"id: {sequence_id}, cf: {closed_form}, new: {new}, ok: {ok}         ")
         if x > 0 and x & 10 == 0:
             conn.commit()
     conn.commit()
@@ -564,8 +570,9 @@ def process_xrefs():
     except:
         A = {}
 
-    global BLACKLIST
-    BLACKLIST += ['A003775']
+    
+    e_BLACKLIST = BLACKLIST2
+    
     formula_count = 0
     for x, row in enumerate(cursor.execute("select id, parsed_formulas from sequence where parsed_formulas is not NULL order by id;")):
         if row[1] is not None:
