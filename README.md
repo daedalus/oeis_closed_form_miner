@@ -1,5 +1,7 @@
 # OEIS Closed Form Miner
 
+[![CodeQL](https://github.com/daedalus/oeis_closed_form_miner/actions/workflows/codeql.yml/badge.svg)](https://github.com/daedalus/oeis_closed_form_miner/actions/workflows/codeql.yml)
+
 ## Overview
 
 This Python script is designed to interact with the On-Line Encyclopedia of Integer Sequences [OEIS](https://oeis.org) to retrieve, process, and store information about integer sequences. The script uses a combination of web scraping, local caching, and database storage to analyze OEIS sequences and guess their closed forms.
