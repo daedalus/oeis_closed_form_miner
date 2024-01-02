@@ -357,7 +357,7 @@ def process_sequences(ignore_blacklist=False):
     m = 0
 
     if ignore_blacklist:
-        seq_BACKLIST = []
+        seq_BLACKLIST = []
     else:
         seq_BLACKLIST = sorted(set(BLACKLIST + list(yield_blacklist(cursor))))
     
