@@ -52,7 +52,7 @@ This Python script is designed to interact with the On-Line Encyclopedia of Inte
 ## Dependencies
 
 - Python libraries: `sqlite3`
-- External libraries: `lzo` (for compression), `sage.all` (for mathematical analysis)
+- External libraries: `lzo` (for compression), `sage.all` (for mathematical analysis), `tqdm`.
 
 ## License
 
