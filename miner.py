@@ -536,6 +536,7 @@ def verify_sequences(ignore_blacklist=False):
 
     fail_count = 0
     check_count = 0
+    proc = 0 
 
     if ignore_blacklist:
         e_BLACKLIST = []
@@ -543,7 +544,6 @@ def verify_sequences(ignore_blacklist=False):
         e_BLACKLIST = BLACKLIST3
         
     for x, row in enumerate(yield_unchecked_closed_form(cursor1)):
-        proc = x + 1
         sequence_id = row[0]
         if sequence_id in e_BLACKLIST: continue
         data=[int(x) for x in row[1].split(",")]
@@ -551,7 +551,8 @@ def verify_sequences(ignore_blacklist=False):
         new = row[3]
         #sys.stderr.write(f"Processing: {sequence_id}...\r")
         #sys.stderr.flush()
-        if len(closed_form) > 1: 
+        if len(closed_form) > 1:
+            proc += 1 
             exp = string_to_expression(closed_form)
             ok = expression_verify_sequence(exp, data)
             cursor2.execute("update sequence set check_cf=? where id=?;", (int(ok),sequence_id))
@@ -563,7 +564,7 @@ def verify_sequences(ignore_blacklist=False):
         if x > 0 and x & 10 == 0:
             conn.commit()
         if check_count > 0 and fail_count > 0:
-            sys.stderr.write("sequence id: %s, PROC: %d RATIO(P/C): %.3f RATIO(P/F): %.3f\r" %(sequence_id, proc,proc / check_count, proc / fail_count) )
+            sys.stderr.write("sequence id: %s, PROC: %d, check: %d, fail: %d, RATIO(P/C): %.3f RATIO(P/F): %.3f \r" %(sequence_id, proc, check_count, fail_count, proc / check_count, proc / fail_count) )
             sys.stderr.flush()
     conn.commit()
 
