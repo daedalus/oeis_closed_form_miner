@@ -534,6 +534,9 @@ def process_sequences(ignore_blacklist=False):
         if n % 10 == 0:
             conn.commit()
 
+    cursor.execute("PRAGMA optimize;")
+    conn.commit()
+
 
 def yield_unchecked_closed_form(cursor):
     #cursor.execute("select id, data , closed_form from sequence where closed_form is not NULL and check_cf is NULL and new=1 order by id;")
@@ -580,6 +583,8 @@ def verify_sequences(ignore_blacklist=False):
         if check_count > 0 and fail_count > 0:
             sys.stderr.write("sequence id: %s, PROC: %d, check: %d, fail: %d, RATIO(P/C): %.3f RATIO(P/F): %.3f \r" %(sequence_id, proc, check_count, fail_count, proc / check_count, proc / fail_count) )
             sys.stderr.flush()
+    
+    cursor2.execute("PRAGMA optimize;")
     conn.commit()
 
 
@@ -627,6 +632,7 @@ def process_xrefs():
     lsk = len(sk)
     print("Total sequences to process: %d, formulas: %d, total work to do (n(n-1)/2): %d" % (lsk, formula_count, lsk*(lsk-1) // 2))
     for i in tqdm(range(0,lsk)):
+        count = 0
         id_a = sk[i]
         l_fexp_a = D[id_a]
         if id_a not in A: A[id_a] = []
@@ -645,10 +651,16 @@ def process_xrefs():
                                 print("seq a:", id_a, fexp_a, "seq b:", id_b, fexp_b)
                                 print("-"*80)
                                 sql = "insert into matches values (?,?,?,?);"
-                                cur.execute(sql,(id_a,id_b, str(fexp_a), str(fexp_b)))
-                    A[id_a].append(id_b)      
-        compress_pickle(XREF_PKL_FILE, A)
+                                cursor.execute(sql,(id_a,id_b, str(fexp_a), str(fexp_b)))
+                                count += 1
+                    A[id_a].append(id_b)  
+        if count > 0:    
+            compress_pickle(XREF_PKL_FILE, A)
+            conn.commit()
         print(id_a, "processed xrefs:", len(A[id_a]))
+
+    cursor.execute("PRAGMA optimize;")
+    conn.commit()
 
 
 def main():
