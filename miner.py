@@ -297,14 +297,14 @@ def create_database(length):
     conn = sqlite3.connect(OEIS_DB_PATH)
     cur = conn.cursor()
     cur.execute("CREATE TABLE sequence(id, name TEXT, data TEXT, formula TEXT, closed_form TEXT, "
-                "simplified_closed_form TEXT, new INT, regex_match INT, parsed_formulas TEXT, keyword TEXT, xref TEXT, algo TEXT, check_cf INT);")
+                "simplified_closed_form TEXT, new INT, regex_match INT, parsed_formulas TEXT, keyword TEXT, xref TEXT, algo TEXT, check_cf INT, not_easy INT, hard INT);")
     cur.execute("CREATE TABLE matches(id_a TEXT, id_b TEXT, formula_a TEXT, formula_b, TEXT);")
     cur.execute("CREATE TABLE blacklist(sequence_id TEXT);")
 
-    for n in range(1, length + 1):
+    for n in tqdm(range(1, length + 1)):
         cur.execute("INSERT INTO sequence (id) VALUES ('A%06d');" % n)
 
-    for sequence_id in BLACKLIST:
+    for sequence_id in tqdm(BLACKLIST):
         cur.execute("INSERT INTO blacklist (sequence_id) VALUES(?);", (sequence_id,))
 
     conn.commit()
@@ -361,7 +361,7 @@ def download_only_remaining(start,end):
     conn = sqlite3.connect(OEIS_DB_PATH)
     cursor = conn.cursor()
     fails = 0
-    for n in range(start,end):
+    for n in tqdm(range(start,end)):
         fails = 0
         sequence_id = "A%06d" % n
         raw_data = get_sequence(sequence_id)
@@ -402,6 +402,10 @@ def process_sequences(ignore_blacklist=False):
     for n, sequence_id in enumerate(yield_unprocessed_ids(cursor)):
         if sequence_id in seq_BLACKLIST:
             continue
+     
+        is_hard = False
+        is_not_easy = False
+
         t0 = time.time()
         sys.stderr.write("Processing: %s...           \r" % sequence_id)
         sys.stderr.flush()
@@ -420,6 +424,14 @@ def process_sequences(ignore_blacklist=False):
             if (keyword := raw_data['results'][0]['keyword']) == 'allocated':
                 print(sequence_id, keyword, "...")
                 continue
+
+
+            if keyword.find("hard") > -1:
+                is_hard = True
+                hard_count += 1
+            if keyword.find("easy") == -1:
+                is_not_easy = True
+
             data = [int(x) for x in sdata.split(",")]
             xref = None
             if 'xref' in raw_data['results'][0]:
@@ -470,8 +482,10 @@ def process_sequences(ignore_blacklist=False):
                     if is_new:
                         new_count += 1
                         if keyword.find("hard") > -1:
+                            is_hard = True
                             hard_count += 1
                         if keyword.find("easy") == -1:
+                            is_not_easy = True
                             not_easy_count += 1
                         print(80 * "=")
                         print("ID:", sequence_id)
@@ -507,9 +521,9 @@ def process_sequences(ignore_blacklist=False):
 
             if simplified_closed_form == closed_form: simplified_closed_form = None
             
-            sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, parsed_formulas=?, keyword=?, xref=?, algo=?, check_cf=? WHERE id=?"""
+            sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, parsed_formulas=?, keyword=?, xref=?, algo=?, check_cf=?, hard=?, not_easy=?  WHERE id=?"""
             cursor.execute(sql, (name, sdata, formula, closed_form, simplified_closed_form, int(is_new),
-                int(v_regex_match), formula_exps_str, keyword, xref, algo, v_check_cf, sequence_id))
+                int(v_regex_match), formula_exps_str, keyword, xref, algo, v_check_cf, is_hard, is_not_easy, sequence_id))
      
         else:
             fail_count += 1
@@ -592,7 +606,7 @@ def process_xrefs():
     e_BLACKLIST = BLACKLIST2
     
     formula_count = 0
-    for x, row in enumerate(cursor.execute("select id, parsed_formulas from sequence where parsed_formulas is not NULL order by id;")):
+    for x, row in tqdm(enumerate(cursor.execute("select id, parsed_formulas from sequence where parsed_formulas is not NULL order by id;"))):
         if row[1] is not None:
             parsed_formulas = json.loads(row[1])
 
@@ -602,7 +616,8 @@ def process_xrefs():
 
             for formula in parsed_formulas:
                 if len(formula) > 1:
-                    print(x+1, sequence_id, formula, len(formula))
+                    #sys.stderr.write(f"{x+1}, {sequence_id}, {formula}, {len(formula)}\r")
+                    #sys.stderr.flush()
                     fexp = string_to_expression(formula)           
                     if fexp not in D[sequence_id]:
                         D[sequence_id].append(fexp)
@@ -611,7 +626,7 @@ def process_xrefs():
     sk = sorted(D.keys())
     lsk = len(sk)
     print("Total sequences to process: %d, formulas: %d, total work to do (n(n-1)/2): %d" % (lsk, formula_count, lsk*(lsk-1) // 2))
-    for i in range(0,lsk):
+    for i in tqdm(range(0,lsk)):
         id_a = sk[i]
         l_fexp_a = D[id_a]
         if id_a not in A: A[id_a] = []
