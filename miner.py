@@ -10,6 +10,7 @@ import sqlite3
 import lzo
 import gzip
 import argparse
+from tqdm import tqdm
 from functools import cache
 from sage.all import CFiniteSequences, QQ, sage_eval, var
 from sage.all_cmdline import fast_callable
@@ -64,6 +65,7 @@ def string_to_expression(s):
         return sage_eval(s, locals={'n': var('x'),'x':var('x')})
     except Exception:
         return
+
 
 def simplify_expression(cf):
     """
@@ -252,6 +254,7 @@ def expression_verify_sequence(exp, ground_truth_data):
   except:
       return False
   e_data = [fexp(n) for n in range(0, lg+1)]
+  #e_data = [fexp(n) for n in tqdm(range(0, lg+1))]
   if e_data[:lg] == ground_truth_data or e_data[1:] == ground_truth_data:
       return True
   return False
@@ -375,6 +378,7 @@ def process_sequences(ignore_blacklist=False):
     not_easy_count = 0
     tc = 0
     m = 0
+    check_cf = False
 
     if ignore_blacklist:
         seq_BLACKLIST = []
@@ -418,7 +422,7 @@ def process_sequences(ignore_blacklist=False):
             algo = None
             is_new = False
             v_regex_match = False
-            check = False
+            v_check_cf = None
 
             if l_formula:
                 formula_exps = formula_match_regex(OEIS_FORMULA_REGEX_4, l_formula)
@@ -441,8 +445,9 @@ def process_sequences(ignore_blacklist=False):
 
                     if closed_form_exp is not None and formula_exps is not None:
                         is_new &= not (v_regex_match := formula_match_exp(formula_exps, closed_form_exp))
-                    
-                    check = expression_verify_sequence(string_to_expression(closed_form), data)
+                                    
+                    if check_cf:
+                        v_check_cf = expression_verify_sequence(string_to_expression(closed_form), data)
 
                     td = time.time() - t0
                     tc += td
@@ -487,7 +492,7 @@ def process_sequences(ignore_blacklist=False):
 
             sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, parsed_formulas=?, keyword=?, xref=?, algo=?, check_cf=? WHERE id=?"""
             cursor.execute(sql, (name, sdata, formula, closed_form, simplified_closed_form, int(is_new),
-                int(v_regex_match), formula_exps_str, keyword, xref, algo, int(check), sequence_id))
+                int(v_regex_match), formula_exps_str, keyword, xref, algo, int(v_check_cf), sequence_id))
      
         else:
             fail_count += 1
@@ -500,11 +505,13 @@ def process_sequences(ignore_blacklist=False):
 
 
 def yield_unchecked_closed_form(cursor):
+    #cursor.execute("select id, data , closed_form from sequence where closed_form is not NULL and check_cf is NULL and new=1 order by id;")
     cursor.execute("select id, data , closed_form from sequence where closed_form is not NULL and check_cf is NULL order by id;")
     for row in cursor:
       yield row
 
-def verify_sequences():
+
+def verify_sequences(ignore_blacklist=False):
     conn = sqlite3.connect(OEIS_DB_PATH)
     cursor1 = conn.cursor()
     cursor2 = conn.cursor()
@@ -515,8 +522,16 @@ def verify_sequences():
     found_count = 0
     hard_count = 0
     not_easy_count = 0
+
+
+    if ignore_blacklist:
+        e_BLACKLIST = []
+    else:
+        e_BLACKLIST = BLACKLIST + ['A000073','A000078','A000213','A000253','A000288','A000803','A000930','A000931', 'A001590']
+   
     for x, row in enumerate(yield_unchecked_closed_form(cursor1)):
         sequence_id = row[0]
+        if sequence_id in e_BLACKLIST: continue
         data=[int(x) for x in row[1].split(",")]
         closed_form = row[2]
         sys.stderr.write(f"Processing: {sequence_id}...\r")
@@ -524,13 +539,11 @@ def verify_sequences():
         if len(closed_form) > 1: 
             ok = expression_verify_sequence(string_to_expression(closed_form), data)
             cursor2.execute("update sequence set check_cf=? where id=?;", (int(ok),sequence_id))
-            print(f"{sequence_id},{closed_form},{ok}")
-        else:
-            print(f"{sequence_id}, closed_form=0")
-
+            print(f"{sequence_id}, {closed_form}, {ok}         ")
         if x > 0 and x & 10 == 0:
             conn.commit()
     conn.commit()
+
 
 def process_xrefs():
     """
@@ -618,12 +631,12 @@ def main():
         process_xrefs()
     elif args.add_to_blacklist:
         add_to_blacklist(args.add_to_blacklist)
+    elif args.verify_sequences:
+        verify_sequences(args.ignore_blacklist)
     elif args.ignore_blacklist:
         print('Begin processing sequences (ignoring blacklist)...')
         process_sequences(True)
         print('End.')
-    elif args.verify_sequences:
-        verify_sequences()
     else:
         print('Begin processing sequences...')
         process_sequences()
