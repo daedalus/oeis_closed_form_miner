@@ -239,10 +239,7 @@ def check_sequence(data, items=10):
 
 
 def compare(A,B):
-    for n in range(0,len(A)):
-        if A[n] != B[n]: 
-            return False
-    return True
+    return all(A[n] == B[n] for n in range(0, len(A)))
 
 def expression_verify_sequence(exp, ground_truth_data):
     """
@@ -270,9 +267,10 @@ def expression_verify_sequence(exp, ground_truth_data):
     #     #print(e_data, ground_truth_data)
     #     return True
     #return False
-    if compare(e_data[:lg - 1],ground_truth_data) or compare(e_data[1:], ground_truth_data):
-        return True
-    return False 
+    return bool(
+        compare(e_data[: lg - 1], ground_truth_data)
+        or compare(e_data[1:], ground_truth_data)
+    ) 
 
 def process_file():
     """
@@ -541,8 +539,7 @@ def process_sequences(ignore_blacklist=False):
 def yield_unchecked_closed_form(cursor):
     #cursor.execute("select id, data , closed_form from sequence where closed_form is not NULL and check_cf is NULL and new=1 order by id;")
     cursor.execute("select id, data , closed_form, new from sequence where closed_form is not NULL and check_cf is NULL order by id;")
-    for row in cursor:
-      yield row
+    yield from cursor
 
 
 def verify_sequences(ignore_blacklist=False):
@@ -555,11 +552,7 @@ def verify_sequences(ignore_blacklist=False):
     check_count = 0
     proc = 0 
 
-    if ignore_blacklist:
-        e_BLACKLIST = []
-    else:
-        e_BLACKLIST = BLACKLIST3
-        
+    e_BLACKLIST = [] if ignore_blacklist else BLACKLIST3
     for x, row in enumerate(yield_unchecked_closed_form(cursor1)):
         sequence_id = row[0]
         if sequence_id in e_BLACKLIST: continue
@@ -583,7 +576,7 @@ def verify_sequences(ignore_blacklist=False):
         if check_count > 0 and fail_count > 0:
             sys.stderr.write("sequence id: %s, PROC: %d, check: %d, fail: %d, RATIO(P/C): %.3f RATIO(P/F): %.3f \r" %(sequence_id, proc, check_count, fail_count, proc / check_count, proc / fail_count) )
             sys.stderr.flush()
-    
+
     cursor2.execute("PRAGMA optimize;")
     conn.commit()
 
