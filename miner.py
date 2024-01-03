@@ -17,19 +17,21 @@ from sage.all_cmdline import fast_callable
 from lib.pickling import *
 from lib.blacklist import *
 
+# Constants
 ALGORITHMS = ['sage', 'pari']
 OEIS_DATA_DIR = 'oeis_data'
 OEIS_DB_PATH = os.path.join(OEIS_DATA_DIR, 'oeis.db')
 XREF_PKL_FILE = os.path.join(OEIS_DATA_DIR, 'xref.pkl')
 SEQUENCE_MODE = "lzo"
 
+# Regular expressions
 OEIS_FORMULA_REGEX_1 = '^a\(n\)\s\=\s(.*)\.\s\-\s\_(.*)\_\,(.*)$'
 OEIS_FORMULA_REGEX_2 = '^a\(n\)\s\=\s(.*)\.$'
 OEIS_FORMULA_REGEX_3 = '^a\(n\)\s\=\s(.*)\.|(\s\-\s\_(.*)\_\,(.*))$'
 OEIS_FORMULA_REGEX_4 = '^a\(n\)\s\=\s(.*)\.$|a\(n\)\s\=\s(.*)\.(\s\-\s\_(.*)\_\,(.*))$'
 OEIS_XREF_REGEX = 'A[0-9]{6}'
 
-
+# Functions
 def regex_match_one(regex, expression):
     """
     Matches an expression (formula in the OEIS format) to a regex.
@@ -95,8 +97,7 @@ def formula_match_regex(RE, formulas):
                 matched.append(string_to_expression(r_formula))
             except Exception:
                 pass
-    if matched:
-        return matched
+    return matched if matched else None
 
 
 def formula_match_exp(formula_exps, closed_form_exp):
@@ -110,14 +111,14 @@ def formula_match_exp(formula_exps, closed_form_exp):
     Returns:
         bool: True if there is a match.
     """
-    for f_exp in formula_exps:
-        try:
-            if f_exp == closed_form_exp:
-                return True
-        except Exception:
-            pass
-    return False
-
+    #for f_exp in formula_exps:
+    #    try:
+    #        if f_exp == closed_form_exp:
+    #            return True
+    #    except Exception:
+    #        pass
+    #return False
+    return any(f_exp == closed_form_exp for f_exp in formula_exps)
 
 def get_sequence(sequence_id):
     """
@@ -146,57 +147,38 @@ def load_cached_sequence(sequence_id):
     Returns:
         dict or None: The cached sequence data in dictionary format or None if not found.
     """
-    n = sequence_id[1:4]
-    file_path = None
-
-    file_path0 = os.path.join(OEIS_DATA_DIR, f'{sequence_id}.{SEQUENCE_MODE}')
-    if os.path.isfile(file_path0):
-        file_path = file_path0
-
-    file_path1 = os.path.join(OEIS_DATA_DIR, n, f'{sequence_id}.{SEQUENCE_MODE}')
-    if os.path.isfile(file_path1):
-        file_path = file_path1
-
-    file_path2 = os.path.join(OEIS_DATA_DIR,'sequences', n, f'{sequence_id}.{SEQUENCE_MODE}')
-    if os.path.isfile(file_path2):
-        file_path = file_path2
-
-
-    if file_path is not None:
-        with open(file_path, 'rb') as fp:
-            if SEQUENCE_MODE == 'lzo':
-                return json.loads(lzo.decompress(fp.read()))
-            elif SEQUENCE_MODE == 'lzogzip':
-                return json.loads(lzo.decompress(gzip.decompress(fp.read())))
-            else:
-                return json.loads(fp.read())
-
+    file_paths = [
+        os.path.join(OEIS_DATA_DIR, f'{sequence_id}.{SEQUENCE_MODE}'),
+        os.path.join(OEIS_DATA_DIR, sequence_id[1:4], f'{sequence_id}.{SEQUENCE_MODE}'),
+        os.path.join(OEIS_DATA_DIR, 'sequences', sequence_id[1:4], f'{sequence_id}.{SEQUENCE_MODE}')
+    ]
+    for file_path in file_paths:
+        if os.path.isfile(file_path):
+            with open(file_path, 'rb') as fp:
+                if SEQUENCE_MODE == 'lzo':
+                    return json.loads(lzo.decompress(fp.read()))
+                elif SEQUENCE_MODE == 'lzogzip':
+                    return json.loads(lzo.decompress(gzip.decompress(fp.read())))
+                else:
+                    return json.loads(fp.read())
+    return None
 
 
 def remove_cached_sequence(sequence_id):
     """
     Remove a given cache object.
     """
-    n = sequence_id[1:4]
-    file_path = None
-
-    file_path0 = os.path.join(OEIS_DATA_DIR, f'{sequence_id}.{SEQUENCE_MODE}')
-    if os.path.isfile(file_path0):
-        file_path = file_path0
-
-    file_path1 = os.path.join(OEIS_DATA_DIR, n, f'{sequence_id}.{SEQUENCE_MODE}')
-    if os.path.isfile(file_path1):
-        file_path = file_path1
-
-    file_path2 = os.path.join(OEIS_DATA_DIR,'sequences', n, f'{sequence_id}.{SEQUENCE_MODE}')
-    if os.path.isfile(file_path2):
-        file_path = file_path2
-
-    if file_path:
-        os.system(f"rm {file_path}")
-        return True
-
+    file_paths = [
+        os.path.join(OEIS_DATA_DIR, f'{sequence_id}.{SEQUENCE_MODE}'),
+        os.path.join(OEIS_DATA_DIR, sequence_id[1:4], f'{sequence_id}.{SEQUENCE_MODE}'),
+        os.path.join(OEIS_DATA_DIR, 'sequences', sequence_id[1:4], f'{sequence_id}.{SEQUENCE_MODE}')
+    ]
+    for file_path in file_paths:
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+            return True
     return False
+    
 
 def save_cached_sequence(sequence_id, data):
     """
@@ -210,21 +192,22 @@ def save_cached_sequence(sequence_id, data):
     directory_path = f"{OEIS_DATA_DIR}/sequences/{n}"
     if not os.path.isdir(directory_path):
         os.makedirs(directory_path)
-
+        
     file_path = os.path.join(directory_path, f'{sequence_id}.{SEQUENCE_MODE}')
     with open(file_path, 'wb') as fp:
         raw_data = json.dumps(data)
         if SEQUENCE_MODE == 'lzo':
-            comp_data = lzo.compress(raw_data,9)
+            comp_data = lzo.compress(raw_data, 9)
             fp.write(comp_data)
-            return len(raw_data),len(comp_data)
+            return len(raw_data), len(comp_data)
         elif SEQUENCE_MODE == 'lzogzip':
-            comp_data = gzip.compress(lzo.compress(raw_data,9),9)
+            comp_data = gzip.compress(lzo.compress(raw_data, 9), 9)
             fp.write(comp_data)
-            return len(raw_data),len(comp_data)
+            return len(raw_data), len(comp_data)
         else:
             fp.write(raw_data.encode("utf8"))
-            return len(raw_data),0
+            return len(raw_data), 0
+
 
 
 @cache
