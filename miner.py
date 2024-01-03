@@ -237,7 +237,7 @@ def check_sequence(data, items=10):
         return guess_sequence(tuple(data))
 
 
-def compare(A,B):
+def list_compare(A,B):
     """
     Compare elementwise two lists.
     Args:
@@ -251,6 +251,7 @@ def compare(A,B):
         if A[n] != B[n]: 
             return False
     return True
+
 
 def expression_verify_sequence(exp, ground_truth_data):
     """
@@ -272,7 +273,7 @@ def expression_verify_sequence(exp, ground_truth_data):
             e_data.append(int(fx.round()))
         except:
             e_data.append(fx)
-    return compare(e_data[:lg - 1],ground_truth_data) or compare(e_data[1:], ground_truth_data)
+    return list_compare(e_data[:lg - 1],ground_truth_data) or list_compare(e_data[1:], ground_truth_data)
 
 def process_file():
     """
