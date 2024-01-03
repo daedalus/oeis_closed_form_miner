@@ -318,7 +318,8 @@ def create_database(length):
         length (int): The number of sequences to prepopulate the database with.
     """
     if os.path.isfile(OEIS_DB_PATH):
-        print(f'Using database {OEIS_DB_PATH}...')
+        sys.stderr.write(f'Using database {OEIS_DB_PATH}...\n')
+        sys.stderr.flush()
         return
 
     conn = sqlite3.connect(OEIS_DB_PATH)
@@ -402,7 +403,7 @@ def download_only_remaining(start,end):
             sys.exit(-1)
 
 
-def process_sequences(ignore_blacklist=False):
+def process_sequences(ignore_blacklist=False, quiet=False):
     """
     Processes sequences from the generator:
     - Fetches each unvisited sequence from the server or local cache.
@@ -426,13 +427,14 @@ def process_sequences(ignore_blacklist=False):
     for n, sequence_id in enumerate(yield_unprocessed_ids(cursor)):
         if sequence_id in seq_BLACKLIST:
             continue
-     
+    
         is_hard = False
         is_not_easy = False
 
         t0 = time.time()
-        sys.stderr.write("Processing: %s...           \r" % sequence_id)
-        sys.stderr.flush()
+        if not quiet:
+            sys.stderr.write("Processing: %s...           \r" % sequence_id)
+            sys.stderr.flush()
         cached_data = load_cached_sequence(sequence_id)
         if cached_data is not None:
             raw_data = cached_data
@@ -446,11 +448,10 @@ def process_sequences(ignore_blacklist=False):
             name = raw_data['results'][0]['name']
             sdata = raw_data['results'][0]['data']
             if (keyword := raw_data['results'][0]['keyword']) == 'allocated':
-                print(sequence_id, keyword, "...")
+                if not quiet:
+                    print(sequence_id, keyword, "...")
                 remove_cached_sequence(sequence_id)
-
                 continue
-
 
             if keyword.find("hard") > -1:
                 is_hard = True
@@ -501,42 +502,37 @@ def process_sequences(ignore_blacklist=False):
                     if check_cf:
                         v_check_cf = int(expression_verify_sequence(string_to_expression(closed_form), data))
 
+                    if simplified_closed_form != closed_form: simplified_closed_form = None 
+
                     td = time.time() - t0
                     tc += td
                     m = max(m,td)
 
                     if is_new:
                         new_count += 1
-                        if keyword.find("hard") > -1:
-                            is_hard = True
-                            hard_count += 1
-                        if keyword.find("easy") == -1:
-                            is_not_easy = True
-                            not_easy_count += 1
-                        print(80 * "=")
-                        print("ID:", sequence_id)
-                        print("NAME:", name)
-                        print(80 * "-")
-                        print("CLOSED_FORM:", closed_form, "len:", len(closed_form))
-                        if simplified_closed_form is not None and len(simplified_closed_form) > 0:
-                            if simplified_closed_form != closed_form:
-                                print("SIMP_CLOSED_FORM:", simplified_closed_form, "len:", len(simplified_closed_form))
+                        if not quiet:
+                            print(80 * "=")
+                            print("ID:", sequence_id)
+                            print("NAME:", name)
+                            print(80 * "-")
+                            print("CLOSED_FORM:", closed_form, "len:", len(closed_form))
+                            if simplified_closed_form is not None and len(simplified_closed_form) > 0:
+                                if simplified_closed_form != closed_form:
+                                     print("SIMP_CLOSED_FORM:", simplified_closed_form, "len:", len(simplified_closed_form))
                             else:
-                                simplified_closed_form = None
-                        else:
-                            print(sequence_id, "maxima could not simplify:", closed_form)
-                        print("len(data):",len(data))
-                        print("keywords:", keyword)
-                        print("xref:",xref)
-                        print("algo:", algo)
-                        print(80 * "-")
+                                print(sequence_id, "Maxima could not simplify:", closed_form)
+                            print("len(data):",len(data))
+                            print("keywords:", keyword)
+                            print("xref:",xref)
+                            print("algo:", algo)
+                            print(80 * "-")
 
-                        if found_count > 0 and new_count > 0:
-                            print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f, RATIO(P/N): %.3f, HARD: %d, NOT EASY: %d, td: %.3f, avg: %.3f, max: %.3f"
+                            if found_count > 0 and new_count > 0:
+                                print("PROC: %d, FOUND: %d, NEW: %d, RATIO (P/F): %.3f, RATIO (F/N): %.3f, RATIO(P/N): %.3f, HARD: %d, NOT EASY: %d, td: %.3f, avg: %.3f, max: %.3f"
                                     % (proc, found_count, new_count, proc / found_count, found_count / new_count,
                                          proc / new_count, hard_count, not_easy_count, td, tc/proc, m))
-                        #print(formula_match_regex.cache_info())
-                        print(guess_sequence.cache_info())
+                            #print(formula_match_regex.cache_info())
+                            print(guess_sequence.cache_info())
                 else: 
                   closed_form = None
                   simplified_closed_form = None
@@ -554,7 +550,8 @@ def process_sequences(ignore_blacklist=False):
         else:
             fail_count += 1
             if fail_count == 10:
-                print("Failed last: %d sequences..." % fail_count)
+                sys.stderr.write(f"Failed last: {fail_count} sequences...\n")
+                sys.stderr.flush()
                 sys.exit(-1)
 
         if n % 10 == 0:
@@ -688,7 +685,8 @@ def main():
     parser.add_argument('-b', '--add-to-blacklist', metavar='sequence', help='Add a sequence to the blacklist.')
     parser.add_argument('-i', '--ignore-blacklist', action='store_true', help='Ignore the blacklist.')
     parser.add_argument('-v', '--verify_sequences', action='store_true', help='Verify sequences')
-    
+    parser.add_argument('-q', '--quiet', action='store_true', help='Quiet mode.')
+
     args = parser.parse_args()
 
     create_database(368_000)
@@ -702,13 +700,15 @@ def main():
     elif args.verify_sequences:
         verify_sequences(args.ignore_blacklist)
     elif args.ignore_blacklist:
-        print('Begin processing sequences (ignoring blacklist)...')
-        process_sequences(True)
-        print('End.')
+        sys.stderr.write('Begin processing sequences (ignoring blacklist)...\n')
+        process_sequences(True, quiet=args.quiet)
+        sys.stderr.write('End.\n')
     else:
-        print('Begin processing sequences...')
-        process_sequences()
-        print('End.')
+        sys.stderr.write('Begin processing sequences...\n')
+        process_sequences(quiet=args.quiet)
+        sys.srderr.write('End.\n')
+    sys.stderr.flush()
+
 
 if __name__ == "__main__":
     main()
