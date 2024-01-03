@@ -22,7 +22,6 @@ OEIS_DATA_DIR = 'oeis_data'
 OEIS_DB_PATH = os.path.join(OEIS_DATA_DIR, 'oeis.db')
 XREF_PKL_FILE = os.path.join(OEIS_DATA_DIR, 'xref.pkl')
 SEQUENCE_MODE = "lzo"
-#SEQUENCE_MODE = "lzogzip"
 
 OEIS_FORMULA_REGEX_1 = '^a\(n\)\s\=\s(.*)\.\s\-\s\_(.*)\_\,(.*)$'
 OEIS_FORMULA_REGEX_2 = '^a\(n\)\s\=\s(.*)\.$'
@@ -239,6 +238,13 @@ def check_sequence(data, items=10):
 
 
 def compare(A,B):
+    """
+    Compare elementwise two lists.
+    Args:
+       Lists: A,B.
+    Returns:
+        Boolean
+    """
     for n in range(0,len(A)):
         if A[n] != B[n]: 
             return False
@@ -257,7 +263,6 @@ def expression_verify_sequence(exp, ground_truth_data):
         fexp = fast_callable(exp, vars={'x':var('x')})
     except:
         return False
-    #e_data = [fexp(n) for n in range(0, lg+1)]
     e_data = []
     for n in tqdm(range(0, lg+1)):
         fx = fexp(n)
@@ -265,14 +270,7 @@ def expression_verify_sequence(exp, ground_truth_data):
             e_data.append(int(fx.round()))
         except:
             e_data.append(fx)
-    #print(e_data, ground_truth_data)
-    #if e_data[:lg] == ground_truth_data or e_data[1:] == ground_truth_data:
-    #     #print(e_data, ground_truth_data)
-    #     return True
-    #return False
-    if compare(e_data[:lg - 1],ground_truth_data) or compare(e_data[1:], ground_truth_data):
-        return True
-    return False 
+    return compare(e_data[:lg - 1],ground_truth_data) or compare(e_data[1:], ground_truth_data)
 
 def process_file():
     """
@@ -394,11 +392,8 @@ def process_sequences(ignore_blacklist=False):
     m = 0
     check_cf = True
 
-    if ignore_blacklist:
-        seq_BLACKLIST = []
-    else:
-        seq_BLACKLIST = sorted(set(BLACKLIST + list(yield_blacklist(cursor))))
-    
+    seq_BLACKLIST = [] if ignore_blacklist else sorted(set(BLACKLIST + list(yield_blacklist(cursor)))) 
+
     for n, sequence_id in enumerate(yield_unprocessed_ids(cursor)):
         if sequence_id in seq_BLACKLIST:
             continue
@@ -539,10 +534,11 @@ def process_sequences(ignore_blacklist=False):
 
 
 def yield_unchecked_closed_form(cursor):
-    #cursor.execute("select id, data , closed_form from sequence where closed_form is not NULL and check_cf is NULL and new=1 order by id;")
+    """
+    yields rows from table sequence.
+    """
     cursor.execute("select id, data , closed_form, new from sequence where closed_form is not NULL and check_cf is NULL order by id;")
-    for row in cursor:
-      yield row
+    yield from cursor
 
 
 def verify_sequences(ignore_blacklist=False):
@@ -550,24 +546,18 @@ def verify_sequences(ignore_blacklist=False):
     cursor1 = conn.cursor()
     cursor2 = conn.cursor()
 
-
+    commit_size = 1000
     fail_count = 0
     check_count = 0
     proc = 0 
+    e_BLACKLIST = [] if ignore_blacklist else BLACKLIST3
 
-    if ignore_blacklist:
-        e_BLACKLIST = []
-    else:
-        e_BLACKLIST = BLACKLIST3
-        
     for x, row in enumerate(yield_unchecked_closed_form(cursor1)):
         sequence_id = row[0]
         if sequence_id in e_BLACKLIST: continue
         data=[int(x) for x in row[1].split(",")]
         closed_form = row[2]
         new = row[3]
-        #sys.stderr.write(f"Processing: {sequence_id}...\r")
-        #sys.stderr.flush()
         if len(closed_form) > 1:
             proc += 1 
             exp = string_to_expression(closed_form)
@@ -578,7 +568,7 @@ def verify_sequences(ignore_blacklist=False):
                 check_count += 1
             else:
                 fail_count += 1
-        if x > 0 and x & 10 == 0:
+        if x > 0 and x & commit_size == 0:
             conn.commit()
         if check_count > 0 and fail_count > 0:
             sys.stderr.write("sequence id: %s, PROC: %d, check: %d, fail: %d, RATIO(P/C): %.3f RATIO(P/F): %.3f \r" %(sequence_id, proc, check_count, fail_count, proc / check_count, proc / fail_count) )
@@ -588,7 +578,7 @@ def verify_sequences(ignore_blacklist=False):
     conn.commit()
 
 
-def process_xrefs():
+def process_xrefs(ignore_blacklist=False):
     """
     Tries to find new xrefs comparing equivalences in parsed formula expressions.
     """
@@ -600,6 +590,8 @@ def process_xrefs():
     found_count = 0
     hard_count = 0
     not_easy_count = 0
+    formula_count = 0
+    e_BLACKLIST = [] if ignore_blacklist else BLACKLIST2
 
     D={}
     try:
@@ -607,18 +599,11 @@ def process_xrefs():
     except:
         A = {}
 
-    
-    e_BLACKLIST = BLACKLIST2
-    
-    formula_count = 0
     for x, row in tqdm(enumerate(cursor.execute("select id, parsed_formulas from sequence where parsed_formulas is not NULL order by id;"))):
         if row[1] is not None:
             parsed_formulas = json.loads(row[1])
-
             sequence_id = row[0]
-
             D[sequence_id] = []
-
             for formula in parsed_formulas:
                 if len(formula) > 1:
                     #sys.stderr.write(f"{x+1}, {sequence_id}, {formula}, {len(formula)}\r")
@@ -696,4 +681,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
