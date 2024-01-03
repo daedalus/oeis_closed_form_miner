@@ -172,6 +172,32 @@ def load_cached_sequence(sequence_id):
                 return json.loads(fp.read())
 
 
+
+def remove_cached_sequence(sequence_id):
+    """
+    Remove a given cache object.
+    """
+    n = sequence_id[1:4]
+    file_path = None
+
+    file_path0 = os.path.join(OEIS_DATA_DIR, f'{sequence_id}.{SEQUENCE_MODE}')
+    if os.path.isfile(file_path0):
+        file_path = file_path0
+
+    file_path1 = os.path.join(OEIS_DATA_DIR, n, f'{sequence_id}.{SEQUENCE_MODE}')
+    if os.path.isfile(file_path1):
+        file_path = file_path1
+
+    file_path2 = os.path.join(OEIS_DATA_DIR,'sequences', n, f'{sequence_id}.{SEQUENCE_MODE}')
+    if os.path.isfile(file_path2):
+        file_path = file_path2
+
+    if file_path:
+        os.system(f"rm {file_path}")
+        return True
+
+    return False
+
 def save_cached_sequence(sequence_id, data):
     """
     Saves the OEIS sequence data to the local cache.
@@ -421,6 +447,8 @@ def process_sequences(ignore_blacklist=False):
             sdata = raw_data['results'][0]['data']
             if (keyword := raw_data['results'][0]['keyword']) == 'allocated':
                 print(sequence_id, keyword, "...")
+                remove_cached_sequence(sequence_id)
+
                 continue
 
 
