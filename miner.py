@@ -592,6 +592,7 @@ def verify_sequences(ignore_blacklist=False):
 def process_xrefs(ignore_blacklist=False):
     """
     Tries to find new xrefs comparing equivalences in parsed formula expressions.
+    Experimental feature: might not work or be removed in the future.
     """
     conn = sqlite3.connect(OEIS_DB_PATH)
     cursor = conn.cursor()
@@ -610,6 +611,9 @@ def process_xrefs(ignore_blacklist=False):
     except:
         A = {}
 
+    sys.stderr.write("Loading formulas from database...\n")
+    sys.stderr.flush()
+
     for x, row in tqdm(enumerate(cursor.execute("select id, parsed_formulas from sequence where parsed_formulas is not NULL order by id;"))):
         if row[1] is not None:
             parsed_formulas = json.loads(row[1])
@@ -623,6 +627,8 @@ def process_xrefs(ignore_blacklist=False):
                     if fexp not in D[sequence_id]:
                         D[sequence_id].append(fexp)
                         formula_count += 1
+    sys.stderr.write("done\n")
+    sys.stderr.flush()
 
     sk = sorted(D.keys())
     lsk = len(sk)
@@ -664,11 +670,11 @@ def main():
 
     parser.add_argument('-d', '--download', nargs=2, metavar=('start', 'end'), type=int,
                         help='Download only remaining sequences in the specified range.')
-    parser.add_argument('-x', '--process-xrefs', action='store_true', help='Process cross-references.')
+    parser.add_argument('-x', '--process-xrefs', action='store_true', help='Process cross-references (experimental).')
     parser.add_argument('-b', '--add-to-blacklist', metavar='sequence', help='Add a sequence to the blacklist.')
     parser.add_argument('-i', '--ignore-blacklist', action='store_true', help='Ignore the blacklist.')
     parser.add_argument('-v', '--verify_sequences', action='store_true', help='Verify sequences')
-    parser.add_argument('-q', '--quiet', action='store_true', help='Quiet mode.')
+    parser.add_argument('-q', '--quiet', action='store_true', help='Quiet mode (only prints new found closed forms).')
 
     args = parser.parse_args()
 
