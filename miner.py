@@ -241,9 +241,11 @@ def compare(A,B):
     """
     Compare elementwise two lists.
     Args:
-       Lists: A,B.
+        Lists: A,B.
     Returns:
         Boolean
+    Comment:
+        Still faster than: return all(A[n] == B[n] for n in range(0, len(A)))
     """
     for n in range(0,len(A)):
         if A[n] != B[n]: 
