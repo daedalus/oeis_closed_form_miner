@@ -12,7 +12,7 @@ import gzip
 import argparse
 from tqdm import tqdm
 from functools import cache
-from sage.all import CFiniteSequences, QQ, sage_eval, var
+from sage.all import CFiniteSequences, QQ, ZZ, sage_eval, var
 from sage.all_cmdline import fast_callable
 from lib.pickling import *
 from lib.blacklist import *
@@ -211,7 +211,7 @@ def save_cached_sequence(sequence_id, data):
 
 
 @cache
-def guess_sequence(lst):
+def guess_sequence(lst, use_bm=False):
     """
     Guesses the closed form of an integer sequence.
 
@@ -221,16 +221,18 @@ def guess_sequence(lst):
     Returns:
         object or None: The guessed closed form or None if no closed form is found.
     """
-    C = CFiniteSequences(QQ)
-    for algo in ALGORITHMS:
-        if (s := C.guess(list(lst), algorithm=algo)) != 0:
-            try:
-                return s.closed_form(), algo
-            except Exception:
-                return 
+    if use_bm: ALGORITHMS.append("bm")
+    for field in [ZZ,QQ]:
+        C = CFiniteSequences(field)
+        for algo in ALGORITHMS:
+            if (s := C.guess(list(lst), algorithm=algo)) != 0:
+                try:
+                    return s.closed_form(), algo, str(field)
+                except Exception:
+                    return 
 
 
-def check_sequence(data, items=10):
+def check_sequence(data, items=10, use_bm=False):
     """
     Checks a small portion of terms of the sequence first and then the whole sequence.
 
@@ -242,8 +244,8 @@ def check_sequence(data, items=10):
         object or None: The guessed closed form or None if no closed form is found.
     """
     first_terms_data = data[:items]
-    if len(first_terms_data) > 7 and (result := guess_sequence(tuple(first_terms_data))) is not None:
-        return guess_sequence(tuple(data))
+    if len(first_terms_data) > 7 and (result := guess_sequence(tuple(first_terms_data),use_bm=use_bm)) is not None:
+        return guess_sequence(tuple(data), use_bm = use_bm)
 
 
 def list_compare(A,B):
@@ -308,7 +310,7 @@ def create_database(length):
     conn = sqlite3.connect(OEIS_DB_PATH)
     cur = conn.cursor()
     cur.execute("CREATE TABLE sequence(id, name TEXT, data TEXT, formula TEXT, closed_form TEXT, "
-                "simplified_closed_form TEXT, new INT, regex_match INT, parsed_formulas TEXT, keyword TEXT, xref TEXT, algo TEXT, check_cf INT, not_easy INT, hard INT);")
+                "simplified_closed_form TEXT, new INT, regex_match INT, parsed_formulas TEXT, keyword TEXT, xref TEXT, algo TEXT, field TEXT, check_cf INT, not_easy INT, hard INT);")
     cur.execute("CREATE TABLE matches(id_a TEXT, id_b TEXT, formula_a TEXT, formula_b, TEXT);")
     cur.execute("CREATE TABLE blacklist(sequence_id TEXT);")
 
@@ -334,7 +336,7 @@ def add_to_blacklist(sequence_ids):
     conn.commit()
 
 
-def yield_unprocessed_ids(cursor):
+def yield_unprocessed_ids(cursor, reprocess = False):
     """
     Yields a generator of unvisited sequences from the database.
 
@@ -344,7 +346,10 @@ def yield_unprocessed_ids(cursor):
     Yields:
         str: The next unvisited sequence ID.
     """
-    cursor.execute("SELECT id FROM sequence WHERE name IS NULL;")
+    if reprocess:
+        cursor.execute("SELECT id FROM sequence WHERE (closed_form IS NULL or closed_form = '') and name is not NULL;")
+    else:
+        cursor.execute("SELECT id FROM sequence WHERE name IS NULL;")
     for row in cursor.fetchall():
         yield row[0]
 
@@ -386,7 +391,7 @@ def download_only_remaining(start,end):
             sys.exit(-1)
 
 
-def process_sequences(ignore_blacklist=False, quiet=False):
+def process_sequences(ignore_blacklist=False, quiet=False, reprocess=False):
     """
     Processes sequences from the generator:
     - Fetches each unvisited sequence from the server or local cache.
@@ -407,7 +412,7 @@ def process_sequences(ignore_blacklist=False, quiet=False):
 
     seq_BLACKLIST = [] if ignore_blacklist else sorted(set(BLACKLIST + list(yield_blacklist(cursor)))) 
 
-    for n, sequence_id in enumerate(yield_unprocessed_ids(cursor)):
+    for n, sequence_id in enumerate(yield_unprocessed_ids(cursor, reprocess=reprocess)):
         if sequence_id in seq_BLACKLIST:
             continue
     
@@ -456,6 +461,7 @@ def process_sequences(ignore_blacklist=False, quiet=False):
             closed_form = ""
             simplified_closed_form = ""
             algo = None
+            field = None
             is_new = False
             v_regex_match = False
             v_check_cf = None
@@ -465,8 +471,8 @@ def process_sequences(ignore_blacklist=False, quiet=False):
             else:
                 formula_exps = []
 
-            if (cf_algo := check_sequence(data)) is not None:
-                cf, algo = cf_algo
+            if (cf_algo_field := check_sequence(data, use_bm=reprocess)) is not None:
+                cf, algo, field = cf_algo_field
                 found_count += 1
                 closed_form = str(cf)
 
@@ -508,6 +514,7 @@ def process_sequences(ignore_blacklist=False, quiet=False):
                             print("keywords:", keyword)
                             print("xref:",xref)
                             print("algo:", algo)
+                            print("field:", field)
                             print(80 * "-")
 
                             if found_count > 0 and new_count > 0:
@@ -526,9 +533,9 @@ def process_sequences(ignore_blacklist=False, quiet=False):
 
             if simplified_closed_form == closed_form: simplified_closed_form = None
             
-            sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, parsed_formulas=?, keyword=?, xref=?, algo=?, check_cf=?, hard=?, not_easy=?  WHERE id=?"""
+            sql = """UPDATE sequence SET name=?, data=?, formula=?, closed_form=?, simplified_closed_form=?, new=?, regex_match=?, parsed_formulas=?, keyword=?, xref=?, algo=?, field=?, check_cf=?, hard=?, not_easy=?  WHERE id=?"""
             cursor.execute(sql, (name, sdata, formula, closed_form, simplified_closed_form, int(is_new),
-                int(v_regex_match), formula_exps_str, keyword, xref, algo, v_check_cf, is_hard, is_not_easy, sequence_id))
+                int(v_regex_match), formula_exps_str, keyword, xref, algo, field, v_check_cf, is_hard, is_not_easy, sequence_id))
      
         else:
             fail_count += 1
@@ -675,6 +682,8 @@ def main():
     parser.add_argument('-i', '--ignore-blacklist', action='store_true', help='Ignore the blacklist.')
     parser.add_argument('-v', '--verify_sequences', action='store_true', help='Verify sequences')
     parser.add_argument('-q', '--quiet', action='store_true', help='Quiet mode (only prints new found closed forms).')
+    parser.add_argument('-r', '--reprocess', action='store_true', help='Reprocess already processed sequences.')
+
 
     args = parser.parse_args()
 
@@ -690,12 +699,12 @@ def main():
         verify_sequences(args.ignore_blacklist)
     elif args.ignore_blacklist:
         sys.stderr.write('Begin processing sequences (ignoring blacklist)...\n')
-        process_sequences(True, quiet=args.quiet)
+        process_sequences(True, quiet=args.quiet, reprocess = args.reprocess)
         sys.stderr.write('End.\n')
     else:
         sys.stderr.write('Begin processing sequences...\n')
-        process_sequences(quiet=args.quiet)
-        sys.srderr.write('End.\n')
+        process_sequences(quiet=args.quiet, reprocess = args.reprocess)
+        sys.stderr.write('End.\n')
     sys.stderr.flush()
 
 
