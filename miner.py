@@ -436,13 +436,19 @@ def process_sequences(ignore_blacklist=False, quiet=False, reprocess=False):
         if raw_data is not None:
             fail_count = 0
             proc = n + 1
-            name = raw_data['results'][0]['name']
-            sdata = raw_data['results'][0]['data']
+
             if (keyword := raw_data['results'][0]['keyword']) == 'allocated':
                 if not quiet:
                     print(sequence_id, keyword, "...")
                 remove_cached_sequence(sequence_id)
-                continue
+                raw_data = get_sequence(sequence_id)
+                if (keyword := raw_data['results'][0]['keyword']) == 'allocated':
+                    continue
+                else:
+                    save_cached_sequence(sequence_id, raw_data)
+
+            name = raw_data['results'][0]['name']
+            sdata = raw_data['results'][0]['data']
 
             is_hard = keyword.find("hard") > -1
             is_not_easy = keyword.find("easy") == -1
@@ -514,7 +520,7 @@ def process_sequences(ignore_blacklist=False, quiet=False, reprocess=False):
                                 if simplified_closed_form != closed_form:
                                      print("SIMP_CLOSED_FORM:", simplified_closed_form, "len:", len(simplified_closed_form))
                             else:
-                                print(sequence_id, "Maxima could not simplify:", closed_form)
+                                print(sequence_id, "Maxima could not simplify closed form...")
                             print("len(data):",len(data))
                             print("keywords:", keyword)
                             print("xref:",xref)
