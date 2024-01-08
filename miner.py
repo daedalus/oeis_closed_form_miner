@@ -307,6 +307,9 @@ def create_database(length):
         sys.stderr.flush()
         return
 
+    sys.stderr.write("Creating database {OEIS_DB_PATH}...\n")
+    sys.stderr.flush()
+
     conn = sqlite3.connect(OEIS_DB_PATH)
     cur = conn.cursor()
     cur.execute("CREATE TABLE sequence(id, name TEXT, data TEXT, formula TEXT, closed_form TEXT, "
@@ -441,11 +444,8 @@ def process_sequences(ignore_blacklist=False, quiet=False, reprocess=False):
                 remove_cached_sequence(sequence_id)
                 continue
 
-            if keyword.find("hard") > -1:
-                is_hard = True
-                hard_count += 1
-            if keyword.find("easy") == -1:
-                is_not_easy = True
+            is_hard = keyword.find("hard") > -1
+            is_not_easy = keyword.find("easy") == -1
 
             data = [int(x) for x in sdata.split(",")]
             xref = None
@@ -480,9 +480,8 @@ def process_sequences(ignore_blacklist=False, quiet=False, reprocess=False):
                     simplified_closed_form = simplify_expression(cf)
 
                     is_new = (closed_form is not None and closed_form not in name and closed_form not in formula)
-                    is_new |= (simplified_closed_form is not None and simplified_closed_form not in name and
-                                   simplified_closed_form not in formula)
-                        
+                    is_new |= (simplified_closed_form is not None and closed_form not in simplified_closed_form and 
+                        simplified_closed_form not in name and simplified_closed_form not in formula)            
                     closed_form_exp = string_to_expression(closed_form)
 
                     if closed_form_exp is not None and formula_exps is not None:
@@ -497,7 +496,13 @@ def process_sequences(ignore_blacklist=False, quiet=False, reprocess=False):
                     tc += td
                     m = max(m,td)
 
+                    #if is_new and is_hard:
                     if is_new:
+                        if is_hard:
+                            hard_count += 1
+                        if is_not_easy:
+                            not_easy_count += 1
+
                         new_count += 1
                         if not quiet:
                             print(80 * "=")
