@@ -607,6 +607,43 @@ def verify_sequences(ignore_blacklist=False):
     conn.commit()
 
 
+def yield_not_simplified_closed_form(cursor):
+    """
+    """
+    yield from cursor.execute("select id, closed_form from sequence where name is not NULL and (closed_form is not NULL or closed_form != '') and (simplified_closed_form is NULL or simplified_closed_form = '' )")
+
+
+def simplify_existing_closed_form(ignore_blacklist=False):
+    """
+    """
+    conn = sqlite3.connect(OEIS_DB_PATH)
+    cursor1 = conn.cursor()
+    cursor2 = conn.cursor()
+
+
+    for x, row in enumerate(yield_not_simplified_closed_form(cursor1)):
+        sequence_id = row[0]
+        closed_form = row[1]
+
+        if sequence_id in BLACKLIST: #or sequence_id not in ['A000027']:
+            continue
+
+        sys.stderr.write(f"Processing {sequence_id}...\r")
+
+        closed_form_exp = string_to_expression(closed_form)
+        simplified_closed_form_exp = simplify_expression(closed_form_exp)
+        simplified_closed_form = str(simplified_closed_form_exp).replace("x","n")     
+ 
+        if simplified_closed_form_exp is not None and closed_form not in simplified_closed_form:
+            #cursor2.execute("update sequence set simplified_closed_form=? where id=?", (simplified_closed_form, sequence_id)) 
+            sys.stderr.write(f"ID:{sequence_id} Found simplified closed form {simplified_closed_form} for {closed_form}\n")
+
+        sys.stderr.flush()
+
+    cursor2.execute("PRAGMA optimize;")
+    conn.commit()
+
+
 def process_xrefs(ignore_blacklist=False):
     """
     Tries to find new xrefs comparing equivalences in parsed formula expressions.
@@ -694,7 +731,7 @@ def main():
     parser.add_argument('-v', '--verify_sequences', action='store_true', help='Verify sequences')
     parser.add_argument('-q', '--quiet', action='store_true', help='Quiet mode (only prints new found closed forms).')
     parser.add_argument('-r', '--reprocess', action='store_true', help='Reprocess already processed sequences.')
-
+    parser.add_argument('-s','--simplify-closed_form', action='store_true', help='Simplify already found closed forms.')
 
     args = parser.parse_args()
 
@@ -702,12 +739,14 @@ def main():
 
     if args.download:
         download_only_remaining(args.download[0], args.download[1])
+    elif args.simplify_closed_form:
+        simplify_existing_closed_form(ignore_blacklist = args.ignore_blacklist)        
     elif args.process_xrefs:
         process_xrefs()
     elif args.add_to_blacklist:
         add_to_blacklist(args.add_to_blacklist)
     elif args.verify_sequences:
-        verify_sequences(args.ignore_blacklist)
+        verify_sequences(ignore_blacklist = args.ignore_blacklist)
     elif args.ignore_blacklist:
         sys.stderr.write('Begin processing sequences (ignoring blacklist)...\n')
         process_sequences(True, quiet=args.quiet, reprocess = args.reprocess)
